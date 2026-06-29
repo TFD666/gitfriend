@@ -1,0 +1,45 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        base:            'var(--bg-base)',
+        surface:         'var(--bg-surface)',
+        subtle:          'var(--bg-subtle)',
+        overlay:         'var(--bg-overlay)',
+        border:          'var(--border)',
+        'border-subtle': 'var(--border-subtle)',
+        'border-focus':  'var(--border-focus)',
+        accent:          'var(--accent)',
+        'accent-hover':  'var(--accent-hover)',
+        'accent-subtle': 'var(--accent-subtle)',
+        'accent-dim':    'var(--accent-dim)',
+        success:         'var(--success)',
+        'success-subtle':'var(--success-subtle)',
+        warning:         'var(--warning)',
+        'warning-subtle':'var(--warning-subtle)',
+        danger:          'var(--danger)',
+        'danger-subtle': 'var(--danger-subtle)',
+        info:            'var(--info)',
+        'info-subtle':   'var(--info-subtle)',
+        'text-primary':  'var(--text-primary)',
+        'text-secondary':'var(--text-secondary)',
+        'text-muted':    'var(--text-muted)',
+        'text-inverse':  'var(--text-inverse)',
+        'mono-color':    'var(--mono-color)',
+      },
+      fontFamily: {
+        sans: ['Geist', 'system-ui', 'sans-serif'],
+        mono: ['Geist Mono', 'monospace'],
+      },
+      borderRadius: {
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
+      },
+    },
+  },
+  plugins: [],
+}

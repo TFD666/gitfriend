@@ -1,0 +1,55 @@
+# Python Virtual Environments
+venv/
+.venv/
+env/
+.env/
+
+# Python Cache and metadata
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Node/React dependencies and builds
+node_modules/
+dist/
+build/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*.local
+.env.*
+!.env.example
+*.env
+secrets/
+*.pem
+*.key
+id_rsa
+.git-credentials
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE / System files
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+
+# Misc logs and lockfiles
+*.log

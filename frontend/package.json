@@ -1,0 +1,30 @@
+{
+  "name": "devkit-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "@tanstack/react-query": "^5.49.2",
+    "axios": "^1.7.2",
+    "framer-motion": "^12.42.0",
+    "gsap": "^3.15.0",
+    "lucide-react": "^1.21.0",
+    "mermaid": "^11.15.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.24.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.6",
+    "vite": "^5.3.3"
+  }
+}
