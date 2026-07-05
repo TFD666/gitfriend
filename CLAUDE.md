@@ -347,3 +347,4 @@ npm run dev
   both conditions are required independently (AND semantics, enforced in permissions.py)
 - Do not expose chunk content, citations, raw code, Mentor chat history, or GitHub tokens
   through any public (no-auth) endpoint
+project memory container
