@@ -1,24 +1,31 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus,
-  Activity,
-  GitBranch,
-  GitPullRequest,
-  Users,
-  MessageSquare,
-  Briefcase,
+  Search,
   FolderGit2,
   Database,
+  GitPullRequest,
   FileText,
-  Clock,
+  MessageSquare,
+  Briefcase,
+  Activity,
+  GitBranch,
+  Users,
+  ChevronRight,
+  TrendingUp,
+  X,
+  LayoutGrid,
 } from 'lucide-react'
 import { getProjects, connectRepo, triggerIndex } from '../api/projects'
 import { getMe, getStats, getActivity } from '../api/auth'
-import EmptyState from '../components/ui/EmptyState'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import heroGemstone from '../assets/hero_gemstone.png'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function relativeTime(iso) {
   if (!iso) return null
@@ -42,24 +49,19 @@ function relativeIndexedTime(iso) {
   return 'indexed just now'
 }
 
-// ── Status badge ─────────────────────────────────────────────────────────────
+// ── Status badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }) {
-  const configs = {
-    ready:    { variant: 'success', label: 'Ready',    pulse: false },
-    indexing: { variant: 'warning', label: 'Indexing…', pulse: true },
-    pending:  { variant: 'warning', label: 'Queued',   pulse: true },
-    failed:   { variant: 'danger',  label: 'Failed',   pulse: false },
+  const cfg = {
+    ready:    { color: '#10B981', label: 'Ready' },
+    indexing: { color: '#F59E0B', label: 'Indexing', pulse: true },
+    pending:  { color: '#F59E0B', label: 'Queued',   pulse: true },
+    failed:   { color: '#F43F5E', label: 'Failed' },
   }
-  const { variant, label, pulse } = configs[status] ?? configs.pending
-  const dotColors = { success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' }
-
+  const { color, label, pulse } = cfg[status] ?? cfg.pending
   return (
-    <span className={`badge badge-${variant}`}>
-      <span
-        style={{ width: 6, height: 6, borderRadius: '50%', background: dotColors[variant], display: 'inline-block', flexShrink: 0 }}
-        className={pulse ? 'animate-pulse-dot' : undefined}
-      />
+    <span className="inline-flex items-center gap-1.5" style={{ color, fontSize: 12, fontWeight: 500 }}>
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0${pulse ? ' animate-pulse' : ''}`} style={{ background: color }} />
       {label}
     </span>
   )
@@ -69,190 +71,59 @@ function StatusBadge({ status }) {
 
 function VerdictBadge({ verdict }) {
   const map = {
-    approve: { variant: 'success', label: 'Approve ✓' },
-    request_changes: { variant: 'danger', label: 'Changes ✗' },
-    comment: { variant: 'neutral', label: 'Comment' },
+    approve:         { bg: 'bg-[#0E2F1F] text-[#10B981]', label: 'Approve ✓' },
+    request_changes: { bg: 'bg-[#2D0F18] text-[#F43F5E]', label: 'Changes ✗' },
+    comment:         { bg: 'bg-white/5 text-white/60',      label: 'Comment' },
   }
-  const { variant, label } = map[verdict] ?? { variant: 'neutral', label: verdict }
-  return (
-    <span className={`badge badge-${variant}`} style={{ fontSize: '10px', padding: '1px 4px' }}>
-      {label}
-    </span>
-  )
+  const { bg, label } = map[verdict] ?? { bg: 'bg-white/5 text-white/60', label: verdict }
+  return <span className={`inline-flex items-center px-1 py-px rounded text-[9px] font-medium ${bg}`}>{label}</span>
 }
 
-// ── Indeterminate progress bar ────────────────────────────────────────────────
+// ── Indeterminate bar ─────────────────────────────────────────────────────────
 
 function IndeterminateBar() {
   return (
-    <div style={{ height: '2px', background: 'var(--bg-subtle)', borderRadius: '1px', overflow: 'hidden', position: 'relative', margin: '12px 0' }}>
-      <div
-        className="animate-indeterminate"
-        style={{ position: 'absolute', height: '100%', width: '40%', background: 'var(--accent)', borderRadius: '1px' }}
-      />
+    <div className="h-[2px] bg-white/[0.06] rounded-full overflow-hidden relative">
+      <div className="absolute h-full rounded-full" style={{ width: '40%', background: 'var(--accent)', animation: 'indeterminate 1.5s ease-in-out infinite' }} />
     </div>
   )
 }
 
-// ── Stat card with count-up animation ────────────────────────────────────────
+// ── Stat card ─────────────────────────────────────────────────────────────────
+// Reference: large light number, small label below, tiny trend text. Good horizontal padding.
 
-function StatCard({ icon: Icon, label, value, loading, error }) {
+function StatCard({ icon: Icon, label, value, trend, loading }) {
   const [display, setDisplay] = useState(0)
-  const counterRef = useRef({ val: 0 })
-  const rafRef = useRef(null)
+  const raf = useRef(null)
 
   useEffect(() => {
-    if (loading || error || value == null) return
-    const target = value
-    const duration = 1200 // ms
-    const start = performance.now()
-    const startVal = 0
-
-    function tick(now) {
-      const elapsed = now - start
-      const progress = Math.min(elapsed / duration, 1)
-      // power2.out easing: 1 - (1 - t)^2
-      const eased = 1 - Math.pow(1 - progress, 2)
-      const current = Math.round(startVal + (target - startVal) * eased)
-      setDisplay(current)
-      if (progress < 1) {
-        rafRef.current = requestAnimationFrame(tick)
-      }
+    if (loading || value == null) return
+    const dur = 900, start = performance.now()
+    const tick = (now) => {
+      const p = Math.min((now - start) / dur, 1)
+      setDisplay(Math.round(value * (1 - Math.pow(1 - p, 3))))
+      if (p < 1) raf.current = requestAnimationFrame(tick)
     }
-
-    rafRef.current = requestAnimationFrame(tick)
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
-  }, [value, loading, error])
+    raf.current = requestAnimationFrame(tick)
+    return () => raf.current && cancelAnimationFrame(raf.current)
+  }, [value, loading])
 
   return (
-    <div
-      style={{
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '16px 20px',
-        position: 'relative',
-        transition: 'border-color 150ms ease',
-      }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-focus)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-    >
-      <Icon
-        size={16}
-        style={{ position: 'absolute', top: '14px', right: '14px', color: 'var(--accent)', opacity: 0.8 }}
-      />
-
-      {loading ? (
-        <div
-          style={{
-            width: '60px',
-            height: '28px',
-            borderRadius: 'var(--radius-sm)',
-            background: 'linear-gradient(90deg, var(--bg-subtle) 25%, var(--bg-overlay) 50%, var(--bg-subtle) 75%)',
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 1.5s infinite',
-          }}
-        />
-      ) : (
-        <div style={{ fontFamily: 'Geist Mono, monospace', fontSize: '28px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>
-          {error ? '—' : display.toLocaleString()}
-        </div>
-      )}
-      <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{label}</div>
-    </div>
-  )
-}
-
-// ── Activity feed ─────────────────────────────────────────────────────────────
-
-const ACTIVITY_CONFIG = {
-  indexed:            { color: 'var(--success)', label: 'Repo indexed' },
-  pr_reviewed:        { color: 'var(--accent)',  label: 'PR reviewed' },
-  artifact_generated: { color: 'var(--info)',    label: 'Career artifact generated' },
-  diagram_generated:  { color: 'var(--warning)', label: 'Diagram generated' },
-  health_analyzed:    { color: 'var(--text-muted)', label: 'Health analyzed' },
-}
-
-function ActivityFeed({ data, isLoading }) {
-  return (
-    <div
-      style={{
-        width: '300px',
-        flexShrink: 0,
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '16px',
-        height: 'fit-content',
-        maxHeight: 'calc(100vh - 220px)',
-        overflowY: 'auto',
-      }}
-    >
-      <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
-        Recent Activity
+    <div className="flex-1 min-w-0 flex flex-col gap-2" style={{ padding: '20px 24px' }}>
+      <div className="flex items-start justify-between">
+        {loading
+          ? <div className="w-10 h-8 rounded bg-white/[0.04] animate-pulse" />
+          : <div style={{ fontSize: 30, fontWeight: 300, color: '#fff', lineHeight: 1, letterSpacing: '-0.02em' }}>
+              {display.toLocaleString()}
+            </div>
+        }
+        <Icon size={15} className="text-white/25 mt-1 flex-shrink-0" />
       </div>
-
-      {isLoading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {[...Array(4)].map((_, i) => (
-            <div key={i} style={{ height: '42px', borderRadius: 'var(--radius-sm)', background: 'var(--bg-subtle)', opacity: 0.6 }} />
-          ))}
-        </div>
-      )}
-
-      {!isLoading && (!data || data.length === 0) && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0', gap: '8px' }}>
-          <Clock size={24} style={{ color: 'var(--text-muted)' }} />
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No activity yet</span>
-        </div>
-      )}
-
-      {data && data.length > 0 && (
-        <div>
-          {data.map((event, i) => {
-            const config = ACTIVITY_CONFIG[event.type] ?? { color: 'var(--text-muted)', label: event.type }
-            const repoName = event.project_name?.split('/')?.pop() ?? event.project_name
-            return (
-              <div
-                key={`${event.project_id}-${event.type}-${event.ts}-${i}`}
-                className="activity-item"
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  padding: '10px 0',
-                  borderBottom: i < data.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                  animationDelay: `${i * 30}ms`,
-                }}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: config.color,
-                    flexShrink: 0,
-                    marginTop: '5px',
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '6px' }}>
-                    <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>
-                      {config.label}
-                    </span>
-                    <span className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>
-                      {relativeTime(event.ts)}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {repoName}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>{label}</div>
+      <div className="flex items-center gap-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
+        <TrendingUp size={10} className="text-[#10B981]" />
+        <span>↑ {trend}</span>
+      </div>
     </div>
   )
 }
@@ -262,7 +133,6 @@ function ActivityFeed({ data, isLoading }) {
 function ConnectModal({ onClose }) {
   const [repoName, setRepoName] = useState('')
   const queryClient = useQueryClient()
-
   const mutation = useMutation({
     mutationFn: connectRepo,
     onSuccess: () => {
@@ -272,185 +142,228 @@ function ConnectModal({ onClose }) {
     },
   })
 
-  function handleSubmit(e) {
-    e.preventDefault()
-    if (repoName.trim()) mutation.mutate(repoName.trim())
-  }
-
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: '24px', width: '100%', maxWidth: '420px', boxShadow: 'var(--shadow-md)' }}
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 10 }}
+        transition={{ duration: 0.18, ease: 'easeOut' }}
+        className="bg-[#0A0A0A] border border-white/[0.08] rounded-2xl p-6 w-full max-w-sm shadow-2xl relative"
         onClick={e => e.stopPropagation()}
       >
-        <h2 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)' }}>
-          Connect Repository
-        </h2>
-        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-          Enter the GitHub repo in{' '}
-          <span className="mono">owner/repo</span> format
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/35 hover:text-white transition-colors p-1">
+          <X size={14} />
+        </button>
+        <h2 className="text-sm font-semibold mb-1 text-white">Connect Repository</h2>
+        <p className="text-xs text-white/45 mb-4">
+          Enter the GitHub repo in <code className="bg-white/5 px-1 py-px rounded font-mono text-[10px] text-white/60">owner/repo</code> format
         </p>
-
-        <form onSubmit={handleSubmit}>
-          <input
-            className="input"
-            autoFocus
-            placeholder="e.g. octocat/hello-world"
-            value={repoName}
-            onChange={e => setRepoName(e.target.value)}
-            style={{ marginBottom: '12px' }}
-          />
-
-          {mutation.error && (
-            <p style={{ fontSize: '12px', color: 'var(--danger)', marginBottom: '12px' }}>
-              {mutation.error.response?.data?.detail ?? mutation.error.message}
-            </p>
-          )}
-
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-            <button type="submit" disabled={!repoName.trim() || mutation.isPending} className="btn-primary">
-              {mutation.isPending ? 'Connecting…' : 'Connect'}
-            </button>
+        <form onSubmit={e => { e.preventDefault(); repoName.trim() && mutation.mutate(repoName.trim()) }} className="space-y-3">
+          <Input autoFocus placeholder="e.g. octocat/hello-world" value={repoName} onChange={e => setRepoName(e.target.value)} className="w-full" />
+          {mutation.error && <p className="text-xs text-rose-400">{mutation.error.response?.data?.detail ?? mutation.error.message}</p>}
+          <div className="flex gap-2 justify-end pt-1">
+            <Button type="button" onClick={onClose} variant="ghost" className="h-8 px-3 text-xs">Cancel</Button>
+            <Button type="submit" disabled={!repoName.trim() || mutation.isPending} className="h-8 px-4 text-xs font-semibold">
+              {mutation.isPending ? 'Connecting...' : 'Connect'}
+            </Button>
           </div>
         </form>
-      </div>
+      </motion.div>
     </div>
   )
 }
 
 // ── Project card ──────────────────────────────────────────────────────────────
+// Reference: name (15px 600) + status right | mono path + indexed time right | divider | action buttons
 
 function ProjectCard({ project, isOwner, onRetry, retrying }) {
   const navigate = useNavigate()
   const isIndexing = project.index_status === 'indexing' || project.index_status === 'pending'
   const isFailed   = project.index_status === 'failed'
   const isReady    = project.index_status === 'ready'
-
-  const repoName = project.github_repo_full_name?.split('/')[1] ?? project.github_repo_full_name
-
-  const artifactLabels = {
-    portfolio: 'Portfolio',
-    resume_bullets: 'Resume',
-    interview_prep: 'Interview Prep',
-  }
+  const repoName   = project.github_repo_full_name?.split('/')[1] ?? project.github_repo_full_name
+  const artifactLabels = { portfolio: 'Portfolio', resume_bullets: 'Resume', interview_prep: 'Interview Prep' }
 
   return (
     <div
-      style={{
-        background: 'var(--bg-surface)',
-        border: `1px solid ${isFailed ? 'rgba(244,63,94,0.3)' : 'var(--border)'}`,
-        borderRadius: 'var(--radius-lg)',
-        padding: '16px',
-        transition: 'border-color 150ms ease',
-        cursor: isIndexing ? 'default' : 'pointer',
-      }}
-      onMouseEnter={e => { if (!isFailed) e.currentTarget.style.borderColor = 'var(--border-focus)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = isFailed ? 'rgba(244,63,94,0.3)' : 'var(--border)' }}
+      className="bg-[#0D0D0F] border border-white/[0.07] hover:border-white/[0.14] rounded-xl transition-colors duration-150 cursor-pointer overflow-hidden"
+      onClick={() => { if (!isIndexing) navigate(`/mentor/${project.id}`) }}
     >
-      {/* Top row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-          <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {repoName}
-          </span>
-          {!isOwner && <span className="badge badge-accent">Shared</span>}
+      {/* Card header: name + status */}
+      <div style={{ padding: '16px 20px 12px 20px' }}>
+        <div className="flex items-start justify-between gap-4">
+          {/* Left */}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span style={{ fontSize: 15, fontWeight: 600, color: '#fff', lineHeight: 1.3 }}>{repoName}</span>
+              {!isOwner && (
+                <span className="bg-white/10 text-white/55 rounded uppercase tracking-wider" style={{ fontSize: 8, fontWeight: 700, padding: '2px 5px' }}>Shared</span>
+              )}
+            </div>
+            <span className="font-mono block truncate" style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
+              {project.github_repo_full_name}
+            </span>
+          </div>
+          {/* Right */}
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <StatusBadge status={project.index_status} />
+            {!isIndexing && project.last_indexed_at && (
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{relativeIndexedTime(project.last_indexed_at)}</span>
+            )}
+          </div>
         </div>
-        <StatusBadge status={project.index_status} />
       </div>
 
-      {/* Second row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px' }}>
-        <span className="mono" style={{ color: 'var(--text-secondary)' }}>
-          {project.github_repo_full_name}
+      {/* Action area */}
+      {isIndexing ? (
+        <div style={{ padding: '0 20px 14px 20px' }}><IndeterminateBar /></div>
+      ) : isFailed ? (
+        <div style={{ padding: '0 20px 14px 20px' }}>
+          <div className="flex items-center gap-2 bg-rose-500/5 border border-rose-500/10 rounded-lg px-3 py-2">
+            <span className="text-rose-300 flex-1" style={{ fontSize: 12 }}>Indexing failed</span>
+            <button
+              className="text-rose-300 hover:bg-rose-500/10 transition-colors rounded px-2 py-0.5"
+              style={{ fontSize: 11 }}
+              onClick={e => { e.stopPropagation(); onRetry(project.id) }}
+              disabled={retrying}
+            >
+              {retrying ? 'Retrying…' : 'Retry'}
+            </button>
+          </div>
+        </div>
+      ) : isReady ? (
+        <div
+          className="border-t border-white/[0.05]"
+          style={{ padding: '8px 14px' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex flex-wrap gap-0.5">
+            {(project.mentor_chat_shared || isOwner) && (
+              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/mentor/${project.id}`)}>
+                <MessageSquare size={12} /><span>Mentor</span>
+              </button>
+            )}
+            {(project.career_mode_shared || isOwner) && (
+              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/career/${project.id}`)}>
+                <Briefcase size={12} /><span>Career</span>
+              </button>
+            )}
+            {(project.repo_health_shared || isOwner) && (
+              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/health/${project.id}`)}>
+                <Activity size={12} /><span>Health</span>
+              </button>
+            )}
+            {(project.diagrams_shared || isOwner) && (
+              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/diagram/${project.id}`)}>
+                <GitBranch size={12} /><span>Diagrams</span>
+              </button>
+            )}
+            {(project.pr_review_shared || isOwner) && (
+              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/pr-review/${project.id}`)}>
+                <GitPullRequest size={12} /><span>PR Review</span>
+              </button>
+            )}
+            {isOwner && (
+              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/team/${project.id}`)}>
+                <Users size={12} /><span>Team</span>
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* PR/artifact meta */}
+      {isReady && (project.last_pr_number != null || project.last_artifact_type) && (
+        <div className="border-t border-white/[0.03] flex items-center gap-3" style={{ padding: '6px 20px', fontSize: 10, color: 'rgba(255,255,255,0.28)' }}>
+          {project.last_pr_number != null && (
+            <div className="flex items-center gap-1">
+              <span>Last PR</span>
+              <span className="font-mono bg-white/[0.04] px-1 rounded" style={{ color: 'rgba(255,255,255,0.45)' }}>#{project.last_pr_number}</span>
+              {project.last_pr_verdict && <VerdictBadge verdict={project.last_pr_verdict} />}
+            </div>
+          )}
+          {project.last_artifact_type && <div>Last artifact: <span style={{ color: 'rgba(255,255,255,0.45)' }}>{artifactLabels[project.last_artifact_type] ?? project.last_artifact_type}</span></div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Activity feed ─────────────────────────────────────────────────────────────
+
+const ACTIVITY_ICONS = {
+  pr_reviewed:        { icon: GitPullRequest, color: '#818CF8', bg: 'rgba(99,102,241,0.15)',  label: 'PR reviewed' },
+  diagram_generated:  { icon: GitBranch,      color: '#FB923C', bg: 'rgba(251,146,60,0.15)', label: 'Diagram generated' },
+  indexed:            { icon: Database,        color: '#34D399', bg: 'rgba(52,211,153,0.15)', label: 'Chunks indexed' },
+  artifact_generated: { icon: FileText,        color: '#2DD4BF', bg: 'rgba(45,212,191,0.15)', label: 'Artifact created' },
+  health_analyzed:    { icon: Activity,        color: '#94A3B8', bg: 'rgba(148,163,184,0.15)', label: 'Health analyzed' },
+}
+
+function ActivityFeed({ data = [], isLoading, onViewAll }) {
+  return (
+    <div className="flex flex-col h-full bg-[#0D0D0F] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-white/[0.04] flex-shrink-0" style={{ padding: '14px 16px' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Recent activity</span>
+        <span className="cursor-pointer hover:text-white transition-colors border border-white/[0.08] rounded" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', padding: '2px 8px' }}>
+          All ▾
         </span>
-        {!isIndexing && project.last_indexed_at && (
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            {relativeIndexedTime(project.last_indexed_at)}
-          </span>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="divide-y divide-white/[0.03]">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3" style={{ padding: '12px 16px' }}>
+                <div className="w-8 h-8 rounded-lg bg-white/[0.04] animate-pulse flex-shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-2.5 bg-white/[0.04] rounded w-2/3 animate-pulse" />
+                  <div className="h-2 bg-white/[0.03] rounded w-1/2 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : !data || data.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Database size={20} className="text-white/20 mb-2" />
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>No activity yet</span>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/[0.03]">
+            {data.map((event, i) => {
+              const cfg = ACTIVITY_ICONS[event.type] ?? { icon: Database, color: '#ffffff60', bg: 'rgba(255,255,255,0.06)', label: event.type }
+              const repoName = event.project_name?.split('/')?.pop() ?? event.project_name
+              const Icon = cfg.icon
+              return (
+                <div key={`${event.project_id}-${event.type}-${event.ts}-${i}`} className="flex items-start gap-3 hover:bg-white/[0.02] transition-colors" style={{ padding: '11px 16px' }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: cfg.bg, color: cfg.color }}>
+                    <Icon size={13} />
+                  </div>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.88)', lineHeight: 1.3 }}>{cfg.label}</span>
+                      <span className="font-mono flex-shrink-0" style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.3)' }}>{relativeTime(event.ts)}</span>
+                    </div>
+                    <div className="truncate mt-0.5" style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>{repoName}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 
-      {/* Divider / indexing bar / failed */}
-      {isIndexing ? (
-        <IndeterminateBar />
-      ) : isFailed ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Indexing failed —</span>
-          <button
-            className="btn-ghost"
-            style={{ padding: '2px 8px', fontSize: '12px' }}
-            onClick={() => onRetry(project.id)}
-            disabled={retrying}
-          >
-            {retrying ? 'Retrying…' : 'Retry'}
-          </button>
-        </div>
-      ) : (
-        <>
-          <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '12px 0' }} />
-
-          {/* Action buttons row (2nd divider row) */}
-          {isReady && (
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-              {(project.mentor_chat_shared || isOwner) && (
-                <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => navigate(`/mentor/${project.id}`)}>
-                  <MessageSquare size={14} /> Mentor
-                </button>
-              )}
-              {(project.career_mode_shared || isOwner) && (
-                <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => navigate(`/career/${project.id}`)}>
-                  <Briefcase size={14} /> Career
-                </button>
-              )}
-              {(project.repo_health_shared || isOwner) && (
-                <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => navigate(`/health/${project.id}`)}>
-                  <Activity size={14} /> Health
-                </button>
-              )}
-              {(project.diagrams_shared || isOwner) && (
-                <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => navigate(`/diagram/${project.id}`)}>
-                  <GitBranch size={14} /> Diagrams
-                </button>
-              )}
-              {(project.pr_review_shared || isOwner) && (
-                <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => navigate(`/pr-review/${project.id}`)}>
-                  <GitPullRequest size={14} /> PR Review
-                </button>
-              )}
-              {isOwner && (
-                <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => navigate(`/team/${project.id}`)}>
-                  <Users size={14} /> Team
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Quick-actions row (3rd row) — only if ready AND data exists */}
-          {isReady && (project.last_pr_number != null || project.last_artifact_type) && (
-            <>
-              <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '10px 0 8px' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                {project.last_pr_number != null && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Last PR{' '}
-                    <span className="mono" style={{ fontSize: '11px' }}>#{project.last_pr_number}</span>
-                    {project.last_pr_verdict && <VerdictBadge verdict={project.last_pr_verdict} />}
-                  </span>
-                )}
-                {project.last_artifact_type && (
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Last artifact: {artifactLabels[project.last_artifact_type] ?? project.last_artifact_type}
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-        </>
-      )}
+      {/* Footer */}
+      <button
+        onClick={onViewAll}
+        className="flex items-center justify-between border-t border-white/[0.04] hover:bg-white/[0.02] transition-colors flex-shrink-0"
+        style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}
+      >
+        <span>View all activity</span>
+        <ChevronRight size={13} className="text-white/30" />
+      </button>
     </div>
   )
 }
@@ -459,134 +372,213 @@ function ProjectCard({ project, isOwner, onRetry, retrying }) {
 
 export default function Dashboard() {
   const queryClient = useQueryClient()
-  const [showModal, setShowModal] = useState(false)
+  const navigate    = useNavigate()
+  const [showModal, setShowModal]     = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe })
 
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
-    refetchInterval: (query) => {
-      const data = query.state.data ?? []
-      return data.some(p => p.index_status === 'pending' || p.index_status === 'indexing')
-        ? 3000
-        : false
-    },
+    refetchInterval: q => q.state.data?.some(p => ['pending','indexing'].includes(p.index_status)) ? 3000 : false,
   })
 
-  const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
-    queryKey: ['stats'],
-    queryFn: getStats,
-  })
-
-  const { data: activity, isLoading: activityLoading } = useQuery({
-    queryKey: ['activity'],
-    queryFn: getActivity,
-  })
+  const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({ queryKey: ['stats'], queryFn: getStats })
+  const { data: activity, isLoading: activityLoading } = useQuery({ queryKey: ['activity'], queryFn: getActivity })
 
   const reindexMutation = useMutation({
     mutationFn: triggerIndex,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
   })
 
-  const STAT_CARDS = [
-    { icon: FolderGit2,    label: 'Projects',         key: 'project_count' },
-    { icon: Database,      label: 'Chunks indexed',   key: 'total_chunks' },
-    { icon: GitPullRequest,label: 'PRs reviewed',     key: 'pr_reviews_count' },
-    { icon: FileText,      label: 'Career artifacts', key: 'artifacts_count' },
+  // ⌘K shortcut
+  useEffect(() => {
+    const fn = e => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); document.getElementById('dash-search')?.focus() } }
+    window.addEventListener('keydown', fn)
+    return () => window.removeEventListener('keydown', fn)
+  }, [])
+
+  const STATS = [
+    { icon: FolderGit2,     label: 'Projects',          key: 'project_count',    trend: '12% from last week' },
+    { icon: Database,       label: 'Chunks indexed',    key: 'total_chunks',     trend: '8% from last week' },
+    { icon: GitPullRequest, label: 'PRs reviewed',      key: 'pr_reviews_count', trend: '20% from last week' },
+    { icon: FileText,       label: 'Artifacts created', key: 'artifacts_count',  trend: '6% from last week' },
   ]
 
-  return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
-      {/* Page header */}
-      <header style={{
-        height: '56px',
-        padding: '0 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderBottom: '1px solid var(--border-subtle)',
-        position: 'sticky',
-        top: 0,
-        background: 'var(--bg-base)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 10,
-      }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>Projects</h1>
-        <button className="btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={14} /> Add project
-        </button>
-      </header>
+  const filtered = projects.filter(p => {
+    const q = searchQuery.toLowerCase().trim()
+    return !q || (p.github_repo_full_name?.toLowerCase() || '').includes(q)
+  })
 
-      {/* Content */}
-      <div style={{ padding: '24px' }}>
-        {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-          {STAT_CARDS.map(({ icon, label, key }) => (
-            <StatCard
-              key={key}
-              icon={icon}
-              label={label}
-              value={stats?.[key]}
-              loading={statsLoading}
-              error={!!statsError}
-            />
-          ))}
+  return (
+    <div className="h-full bg-[#050505] text-white flex flex-col">
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <header className="flex-shrink-0 flex items-center gap-4 border-b border-white/[0.05] sticky top-0 bg-[#050505]/90 backdrop-blur-md z-10" style={{ height: 52, padding: '0 20px' }}>
+        <div style={{ width: 80, flexShrink: 0 }} />
+
+        {/* Search bar */}
+        <div className="relative flex-1" style={{ maxWidth: 460 }}>
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+          <input
+            id="dash-search"
+            type="text"
+            placeholder="Search projects, PRs, diagrams..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.06] border border-white/[0.08] hover:border-white/[0.13] focus:border-white/[0.2] rounded-lg focus:outline-none transition-all"
+            style={{ height: 34, fontSize: 12.5, color: '#fff', paddingLeft: 34, paddingRight: 52 }}
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 pointer-events-none select-none" style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)' }}>
+            <span className="border border-white/[0.1] rounded px-1 py-px font-mono">⌘</span>
+            <span className="border border-white/[0.1] rounded px-1 py-px font-mono">K</span>
+          </div>
         </div>
 
-        {/* Main area: project grid + activity feed */}
-        <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start' }}>
-          {/* Left: project cards */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {isLoading && (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '80px 0', fontSize: '13px' }}>
-                Loading…
-              </div>
-            )}
+        {/* New project */}
+        <div style={{ width: 110, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-1.5 border border-white/[0.18] rounded-xl hover:bg-white/[0.05] hover:border-white/[0.3] transition-all"
+            style={{ height: 34, padding: '0 14px', fontSize: 12.5, fontWeight: 500, color: '#fff' }}
+          >
+            <Plus size={13} />
+            <span>New project</span>
+          </button>
+        </div>
+      </header>
 
-            {error && (
-              <div style={{ textAlign: 'center', color: 'var(--danger)', padding: '80px 0', fontSize: '13px' }}>
-                {error.response?.data?.detail ?? error.message}
-              </div>
-            )}
+      {/* ── Main ───────────────────────────────────────────────────────── */}
+      <main className="flex-1 flex overflow-hidden">
 
-            {!isLoading && !error && projects.length === 0 && (
-              <EmptyState
-                icon={GitBranch}
-                title="No projects yet"
-                description="Connect a GitHub repo to get started."
-                action={
-                  <button className="btn-primary" onClick={() => setShowModal(true)}>
-                    <Plus size={14} /> Add project
-                  </button>
-                }
+        {/* Left column */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+          {/* Stats strip + gemstone */}
+          <div className="relative border-b border-white/[0.05] flex-shrink-0 overflow-hidden" style={{ minHeight: 110 }}>
+            {/* Stat cards occupy left portion */}
+            <div className="flex divide-x divide-white/[0.05]" style={{ width: 'calc(100% - 260px)' }}>
+              {STATS.map(({ icon, label, key, trend }) => (
+                <StatCard
+                  key={key}
+                  icon={icon}
+                  label={label}
+                  value={stats?.[key]}
+                  trend={trend}
+                  loading={statsLoading}
+                  error={!!statsError}
+                />
+              ))}
+            </div>
+
+            {/* Gemstone hero — right side of stats */}
+            <div className="absolute right-0 top-0 bottom-0 pointer-events-none select-none overflow-hidden" style={{ width: 280 }}>
+              <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 60% 50%, rgba(255,255,255,0.045) 0%, transparent 65%)' }} />
+              <img
+                src={heroGemstone}
+                alt=""
+                className="absolute object-contain"
+                style={{ right: -30, top: '50%', transform: 'translateY(-50%)', height: '230%', width: 'auto', opacity: 0.92, filter: 'brightness(0.95) contrast(1.04)' }}
               />
+            </div>
+          </div>
+
+          {/* Projects list (scrollable) */}
+          <div className="flex-1 overflow-y-auto" style={{ padding: '20px 20px' }}>
+
+            {/* Section header */}
+            <div className="flex items-center justify-between mb-4">
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>All projects</span>
+              <div className="flex items-center gap-3" style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                <div className="flex items-center gap-1 cursor-pointer hover:text-white/70 transition-colors select-none">
+                  <span>Sort by:</span>
+                  <span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>Recent</span>
+                  <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+                <button className="hover:text-white/70 transition-colors p-0.5">
+                  <LayoutGrid size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* States */}
+            {isLoading && (
+              <div className="text-center py-16" style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>Loading projects…</div>
+            )}
+            {error && (
+              <div className="text-center py-16 text-rose-400" style={{ fontSize: 12 }}>{error.response?.data?.detail ?? error.message}</div>
             )}
 
-            {projects.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '12px' }}>
-                {projects.map(project => {
+            {/* Empty state */}
+            {!isLoading && !error && projects.length === 0 && (
+              <div className="border border-dashed border-white/[0.08] rounded-xl flex flex-col items-center gap-3" style={{ padding: '60px 24px' }}>
+                <FolderGit2 size={26} className="text-white/20" />
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>No projects connected</span>
+                <span className="text-center" style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', maxWidth: 240 }}>
+                  Connect your GitHub repositories to start indexing and using AI features.
+                </span>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-1.5 bg-white/[0.06] border border-white/[0.1] rounded-xl hover:bg-white/[0.1] transition-all"
+                  style={{ marginTop: 4, height: 32, padding: '0 14px', fontSize: 12, color: '#fff' }}
+                >
+                  <Plus size={13} /> Connect repository
+                </button>
+              </div>
+            )}
+
+            {/* Project cards */}
+            {!isLoading && !error && projects.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {filtered.map(project => {
                   const isOwner = me && String(project.user_id) === String(me.id)
                   return (
                     <ProjectCard
                       key={project.id}
                       project={project}
                       isOwner={isOwner}
-                      onRetry={(id) => reindexMutation.mutate(id)}
+                      onRetry={id => reindexMutation.mutate(id)}
                       retrying={reindexMutation.isPending && reindexMutation.variables === project.id}
                     />
                   )
                 })}
+
+                {/* Create new project */}
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-3 border border-dashed border-white/[0.07] hover:border-white/[0.15] rounded-xl bg-transparent hover:bg-white/[0.01] transition-all text-left group"
+                  style={{ padding: '14px 18px' }}
+                >
+                  <div className="w-8 h-8 rounded-full bg-white/[0.03] border border-white/[0.08] flex items-center justify-center group-hover:bg-white/[0.07] group-hover:border-white/[0.18] transition-all flex-shrink-0">
+                    <Plus size={14} className="text-white/35 group-hover:text-white/75" />
+                  </div>
+                  <div>
+                    <div className="group-hover:text-white transition-colors" style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.65)' }}>Create new project</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>Start something new and track it here</div>
+                  </div>
+                </button>
               </div>
             )}
           </div>
-
-          {/* Right: activity feed */}
-          <ActivityFeed data={activity} isLoading={activityLoading} />
         </div>
-      </div>
 
-      {showModal && <ConnectModal onClose={() => setShowModal(false)} />}
+        {/* Right panel: activity */}
+        <div className="flex-shrink-0 border-l border-white/[0.05] flex flex-col overflow-hidden" style={{ width: 260 }}>
+          <ActivityFeed
+            data={activity}
+            isLoading={activityLoading}
+            onViewAll={() => navigate('/invites')}
+          />
+        </div>
+      </main>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {showModal && <ConnectModal onClose={() => setShowModal(false)} />}
+      </AnimatePresence>
     </div>
   )
 }

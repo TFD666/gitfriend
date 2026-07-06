@@ -1,22 +1,21 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import logo from '../assets/logo.png'
-import { useState } from 'react'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard,
-  Bell,
-  Globe,
+  BarChart2,
+  Users,
   Settings,
   LogOut,
   Sun,
   Moon,
+  ChevronDown,
+  Globe
 } from 'lucide-react'
 import { getMe, logout } from '../api/auth'
 import { getMyInvites } from '../api/team'
-
-const NAV = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Projects' },
-]
+import { Avatar } from './ui/Avatar'
 
 function getStoredTheme() {
   return localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
@@ -31,9 +30,27 @@ function applyTheme(theme) {
   localStorage.setItem('theme', theme)
 }
 
+// Standalone Logo component placeholder. Switch inner items for GIF logo when needed.
+export function Logo() {
+  return (
+    <div className="flex items-center gap-2">
+      <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 2L2 9.5v13L16 30l14-7.5v-13L16 2zm11 19.3L16 26.8 5 20.8v-9.6l11-6 11 6v9.6z" fill="currentColor" className="text-white" />
+        <path d="M16 8.5L7.5 13 16 17.5 24.5 13 16 8.5z" fill="currentColor" className="text-white opacity-80" />
+      </svg>
+      <span className="font-bold text-[14px] text-white tracking-tight">DevKit AI</span>
+    </div>
+  )
+}
+
 export default function Sidebar() {
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
+  
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef(null)
+  
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe })
   const { data: invites = [] } = useQuery({
     queryKey: ['myInvites'],
@@ -41,12 +58,16 @@ export default function Sidebar() {
     refetchInterval: 60_000,
   })
   const pendingCount = invites.length
-
+  
   const [theme, setTheme] = useState(getStoredTheme)
 
-  function handleThemeChange(next) {
-    setTheme(next)
-    applyTheme(next)
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
+
+  function handleThemeToggle() {
+    const nextTheme = theme === 'light' ? 'dark' : 'light'
+    setTheme(nextTheme)
   }
 
   const logoutMutation = useMutation({
@@ -57,227 +78,171 @@ export default function Sidebar() {
     },
   })
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const navItems = [
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Projects' },
+    { to: '#analytics', icon: BarChart2, label: 'Analytics' },
+    { to: '/invites', icon: Users, label: 'Team', badge: pendingCount },
+    { to: '/settings', icon: Settings, label: 'Settings' },
+  ]
+
   return (
-    <aside
-      style={{
-        width: '220px',
-        flexShrink: 0,
-        background: 'var(--bg-surface)',
-        borderRight: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        position: 'sticky',
-        top: 0,
-        overflow: 'hidden',
-      }}
-    >
-      {/* Logo */}
-      <div
-        style={{
-          height: '52px',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 16px',
-          borderBottom: '1px solid var(--border-subtle)',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={logo} alt="DevKit AI" style={{ height: '36px', width: '36px', borderRadius: '10px', mixBlendMode: 'screen' }} />
-          <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>DevKit AI</span>
+    <aside className="w-[160px] flex-shrink-0 bg-[#050505] border-r border-white/[0.05] flex flex-col h-screen sticky top-0 overflow-hidden z-20">
+      {/* Brand Header */}
+      <div className="h-12 flex items-center px-4 border-b border-white/[0.05] flex-shrink-0">
+        <div className="cursor-pointer" onClick={() => navigate('/dashboard')}>
+          <Logo />
         </div>
       </div>
 
-      {/* Nav links */}
-      <nav style={{ flex: 1, padding: '8px 8px', overflowY: 'auto' }}>
-        {/* Top-level pages */}
-        {NAV.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              height: '36px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '13px',
-              fontWeight: 500,
-              textDecoration: 'none',
-              color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-              background: isActive ? 'var(--accent-subtle)' : 'transparent',
-              transition: 'background 150ms ease, color 150ms ease',
-            })}
-          >
-            <Icon size={15} />
-            {label}
-          </NavLink>
-        ))}
+      {/* Navigation */}
+      <nav className="flex-1 py-5 px-2 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
+          const isPlaceholder = item.to.startsWith('#')
+          const isActive = location.pathname === item.to
 
-        {/* Tools group */}
-        <div style={{
-          fontSize: '10px',
-          fontWeight: 600,
-          color: 'var(--text-muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          padding: '16px 12px 4px',
-        }}>
-          Tools
-        </div>
+          const content = (
+            <div className="flex items-center gap-2.5">
+              <item.icon size={16} className={isActive ? 'text-white' : 'text-white/40 group-hover:text-white/70 transition-colors'} />
+              <span className="text-[13px] font-medium">{item.label}</span>
+            </div>
+          )
 
-        {/* Invites */}
-        <NavLink
-          to="/invites"
-          style={({ isActive }) => ({
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            height: '36px',
-            padding: '0 12px',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '13px',
-            fontWeight: 500,
-            textDecoration: 'none',
-            color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-            background: isActive ? 'var(--accent-subtle)' : 'transparent',
-            transition: 'background 150ms ease, color 150ms ease',
-          })}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Bell size={15} />
-            Invites
-          </span>
-          {pendingCount > 0 && (
-            <span className="badge badge-accent" style={{ fontSize: '10px', padding: '1px 5px' }}>
-              {pendingCount}
-            </span>
-          )}
-        </NavLink>
+          if (isPlaceholder) {
+            return (
+              <button
+                key={item.label}
+                onClick={() => alert(`${item.label} feature is coming soon!`)}
+                className="w-full flex items-center justify-between h-8 px-3 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all duration-150 group text-left"
+              >
+                {content}
+              </button>
+            )
+          }
 
-        {/* Public Profile */}
-        {me && (
-          <NavLink
-            to={`/u/${me.github_username}`}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              height: '36px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-md)',
-              fontSize: '13px',
-              fontWeight: 500,
-              textDecoration: 'none',
-              color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-              background: isActive ? 'var(--accent-subtle)' : 'transparent',
-              transition: 'background 150ms ease, color 150ms ease',
-            })}
-          >
-            <Globe size={15} />
-            Public Profile
-          </NavLink>
-        )}
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `flex items-center justify-between h-8 px-3 rounded-lg transition-all duration-150 group ${
+                  isActive
+                    ? 'bg-white/[0.07] border border-white/[0.08] text-white'
+                    : 'text-white/40 hover:text-white/80 hover:bg-white/[0.03] border border-transparent'
+                }`
+              }
+            >
+              {content}
+              {item.badge > 0 && (
+                <span className="bg-white/10 text-white text-[9.5px] font-bold px-2 py-0.5 rounded-full border border-white/5">
+                  {item.badge}
+                </span>
+              )}
+            </NavLink>
+          )
+        })}
       </nav>
 
-      {/* User section */}
-      <div
-        style={{
-          borderTop: '1px solid var(--border-subtle)',
-          padding: '12px',
-          flexShrink: 0,
-        }}
-      >
+      {/* User Section (Profile Card) */}
+      <div className="p-3 border-t border-white/[0.05] flex-shrink-0 relative" ref={dropdownRef}>
         {me ? (
           <>
-            {/* Avatar + username */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-              <img
-                src={`https://github.com/${me.github_username}.png?size=64`}
-                alt={me.github_username}
-                width="32"
-                height="32"
-                style={{
-                  borderRadius: '50%',
-                  border: '1px solid var(--border)',
-                  flexShrink: 0,
-                }}
-              />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {me.github_username}
+            {/* User Profile Card */}
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/[0.03] active:scale-[0.98] transition-all duration-150 text-left group"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Avatar
+                  src={`https://github.com/${me.github_username}.png?size=64`}
+                  alt={me.github_username}
+                  size="sm"
+                  className="ring-1 ring-white/10 group-hover:ring-white/20 transition-all flex-shrink-0"
+                />
+                <div className="min-w-0 leading-tight">
+                  <div className="text-[12px] font-semibold text-white truncate">
+                    {me.github_username}
+                  </div>
+                  <div className="text-[10px] text-white/35 truncate mt-0.5">GitHub user</div>
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>GitHub user</div>
               </div>
-            </div>
+              <ChevronDown size={12} className={`text-white/35 flex-shrink-0 transition-all duration-150 ${dropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-            {/* Theme toggle */}
-            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', marginBottom: '10px' }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Theme</div>
-              <div
-                style={{
-                  display: 'flex',
-                  background: 'var(--bg-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '2px',
-                  gap: '2px',
-                }}
-              >
-                {(['light', 'dark']).map(t => (
+            {/* Dropdown Menu */}
+            <AnimatePresence>
+              {dropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className="absolute bottom-16 left-2 right-2 bg-[#0A0A0A] border border-white/[0.08] rounded-xl shadow-2xl p-2 z-30 flex flex-col space-y-0.5 backdrop-blur-md"
+                >
                   <button
-                    key={t}
-                    id={`theme-toggle-${t}`}
-                    onClick={() => handleThemeChange(t)}
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px',
-                      padding: '4px 6px',
-                      fontSize: '11px',
-                      fontWeight: 500,
-                      border: 'none',
-                      cursor: 'pointer',
-                      borderRadius: 'calc(var(--radius-md) - 2px)',
-                      transition: 'background 150ms ease, color 150ms ease',
-                      background: theme === t ? 'var(--accent-subtle)' : 'transparent',
-                      color: theme === t ? 'var(--accent)' : 'var(--text-muted)',
+                    onClick={() => {
+                      setDropdownOpen(false)
+                      navigate(`/u/${me.github_username}`)
                     }}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors text-left"
                   >
-                    {t === 'light' ? <Sun size={11} /> : <Moon size={11} />}
-                    {t === 'light' ? 'Light' : 'Dark'}
+                    <Globe size={14} />
+                    <span>Public Profile</span>
                   </button>
-                ))}
-              </div>
-            </div>
 
-            {/* Actions row */}
-            <div style={{ display: 'flex', gap: '4px' }}>
-              <button
-                className="btn-ghost"
-                style={{ flex: 1, padding: '4px 8px', fontSize: '11px', justifyContent: 'center' }}
-                onClick={() => navigate('/settings')}
-              >
-                <Settings size={12} /> Settings
-              </button>
-              <button
-                id="sign-out-btn"
-                className="btn-ghost"
-                style={{ flex: 1, padding: '4px 8px', fontSize: '11px', justifyContent: 'center' }}
-                onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)' }}
-                onMouseLeave={e => { e.currentTarget.style.color = '' }}
-              >
-                <LogOut size={12} /> Sign out
-              </button>
-            </div>
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false)
+                      navigate('/settings')
+                    }}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors text-left"
+                  >
+                    <Settings size={14} />
+                    <span>Settings</span>
+                  </button>
+
+                  <button
+                    onClick={handleThemeToggle}
+                    className="flex items-center justify-between px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {theme === 'light' ? <Sun size={14} /> : <Moon size={14} />}
+                      <span>Theme: {theme === 'light' ? 'Light' : 'Dark'}</span>
+                    </div>
+                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-wider bg-white/[0.05] px-1.5 py-0.5 rounded">
+                      Toggle
+                    </div>
+                  </button>
+
+                  <div className="h-[1px] bg-white/[0.06] my-1" />
+
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false)
+                      logoutMutation.mutate()
+                    }}
+                    disabled={logoutMutation.isPending}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors text-left disabled:opacity-40"
+                  >
+                    <LogOut size={14} />
+                    <span>Sign Out</span>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </>
         ) : (
-          <div style={{ height: '80px' }} />
+          <div className="h-10" />
         )}
       </div>
     </aside>
