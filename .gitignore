@@ -50,6 +50,7 @@ id_rsa
 .claude/
 .DS_Store
 Thumbs.db
+*.vsix
 
 # Misc logs and lockfiles
 *.log

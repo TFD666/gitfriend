@@ -23,9 +23,7 @@ import { getProjects, connectRepo, triggerIndex } from '../api/projects'
 import { getMe, getStats, getActivity } from '../api/auth'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import heroGemstone from '../assets/hero_gemstone.png'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function relativeTime(iso) {
   if (!iso) return null
@@ -415,8 +413,8 @@ export default function Dashboard() {
     <div className="h-full bg-[#050505] text-white flex flex-col">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex-shrink-0 flex items-center gap-4 border-b border-white/[0.05] sticky top-0 bg-[#050505]/90 backdrop-blur-md z-10" style={{ height: 52, padding: '0 20px' }}>
-        <div style={{ width: 80, flexShrink: 0 }} />
+      <header className="flex-shrink-0 flex items-center border-b border-white/[0.05] sticky top-0 bg-[#050505]/90 backdrop-blur-md z-10" style={{ height: 52, padding: '0 20px' }}>
+        <div className="hidden md:block w-20 flex-shrink-0" />
 
         {/* Search bar */}
         <div className="relative flex-1" style={{ maxWidth: 460 }}>
@@ -436,16 +434,20 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Spacer to push button to the right */}
+        <div className="flex-1" />
+
         {/* New project */}
-        <div style={{ width: 110, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
-          <button
+        <div className="flex-shrink-0">
+          <Button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 border border-white/[0.18] rounded-xl hover:bg-white/[0.05] hover:border-white/[0.3] transition-all"
-            style={{ height: 34, padding: '0 14px', fontSize: 12.5, fontWeight: 500, color: '#fff' }}
+            variant="primary"
+            className="h-[34px] px-4 text-xs font-semibold shadow-sm"
+            style={{ borderRadius: 'var(--radius-md)' }}
           >
-            <Plus size={13} />
+            <Plus size={13} className="mr-1.5" />
             <span>New project</span>
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -455,10 +457,10 @@ export default function Dashboard() {
         {/* Left column */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-          {/* Stats strip + gemstone */}
-          <div className="relative border-b border-white/[0.05] flex-shrink-0 overflow-hidden" style={{ minHeight: 110 }}>
-            {/* Stat cards occupy left portion */}
-            <div className="flex divide-x divide-white/[0.05]" style={{ width: 'calc(100% - 260px)' }}>
+          {/* Stats strip */}
+          <div className="border-b border-white/[0.05] flex-shrink-0">
+            {/* Stat cards occupy full width */}
+            <div className="flex divide-x divide-white/[0.05] w-full">
               {STATS.map(({ icon, label, key, trend }) => (
                 <StatCard
                   key={key}
@@ -470,17 +472,6 @@ export default function Dashboard() {
                   error={!!statsError}
                 />
               ))}
-            </div>
-
-            {/* Gemstone hero — right side of stats */}
-            <div className="absolute right-0 top-0 bottom-0 pointer-events-none select-none overflow-hidden" style={{ width: 280 }}>
-              <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 60% 50%, rgba(255,255,255,0.045) 0%, transparent 65%)' }} />
-              <img
-                src={heroGemstone}
-                alt=""
-                className="absolute object-contain"
-                style={{ right: -30, top: '50%', transform: 'translateY(-50%)', height: '230%', width: 'auto', opacity: 0.92, filter: 'brightness(0.95) contrast(1.04)' }}
-              />
             </div>
           </div>
 

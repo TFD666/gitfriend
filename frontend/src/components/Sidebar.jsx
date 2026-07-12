@@ -1,5 +1,5 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, createContext, useContext } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -11,11 +11,49 @@ import {
   Sun,
   Moon,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Globe
 } from 'lucide-react'
 import { getMe, logout } from '../api/auth'
 import { getMyInvites } from '../api/team'
 import { Avatar } from './ui/Avatar'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from './ui/Tooltip'
+
+// ── Sidebar Context & Provider ───────────────────────────────────────────────
+
+export const SidebarContext = createContext(null)
+
+export function SidebarProvider({ children }) {
+  const [open, setOpen] = useState(() => {
+    const saved = localStorage.getItem('sidebar_open')
+    return saved !== null ? saved === 'true' : true
+  })
+
+  useEffect(() => {
+    localStorage.setItem('sidebar_open', String(open))
+  }, [open])
+
+  const toggleSidebar = () => setOpen(prev => !prev)
+
+  return (
+    <SidebarContext.Provider value={{ open, setOpen, toggleSidebar }}>
+      <TooltipProvider delayDuration={0} disableHoverableContent={true}>
+        {children}
+      </TooltipProvider>
+    </SidebarContext.Provider>
+  )
+}
+
+export function useSidebar() {
+  const context = useContext(SidebarContext)
+  if (!context) {
+    throw new Error('useSidebar must be used within a SidebarProvider')
+  }
+  return context
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function getStoredTheme() {
   return localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
@@ -30,23 +68,116 @@ function applyTheme(theme) {
   localStorage.setItem('theme', theme)
 }
 
-// Standalone Logo component placeholder. Switch inner items for GIF logo when needed.
-export function Logo() {
-  return (
-    <div className="flex items-center gap-2">
-      <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M16 2L2 9.5v13L16 30l14-7.5v-13L16 2zm11 19.3L16 26.8 5 20.8v-9.6l11-6 11 6v9.6z" fill="currentColor" className="text-white" />
-        <path d="M16 8.5L7.5 13 16 17.5 24.5 13 16 8.5z" fill="currentColor" className="text-white opacity-80" />
-      </svg>
-      <span className="font-bold text-[14px] text-white tracking-tight">DevKit AI</span>
+// ── Nav Items ────────────────────────────────────────────────────────────────
+
+function SidebarNavItem({ item, open, isActive }) {
+  const content = (
+    <div className={`flex items-center ${open ? 'gap-2.5' : 'justify-center w-full'}`}>
+      <item.icon size={16} className={isActive ? 'text-white' : 'text-white/40 group-hover:text-white/70 transition-colors'} />
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.span
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: 'auto' }}
+            exit={{ opacity: 0, width: 0 }}
+            transition={{ duration: 0.15 }}
+            className="text-[13px] font-medium truncate"
+          >
+            {item.label}
+          </motion.span>
+        )}
+      </AnimatePresence>
     </div>
   )
+
+  const navLink = (
+    <NavLink
+      to={item.to}
+      className={
+        `flex items-center ${open ? 'justify-between px-3' : 'justify-center px-0 w-8 h-8 mx-auto'} h-8 rounded-lg transition-all duration-200 group relative ${
+          isActive
+            ? 'bg-white/[0.07] border border-white/[0.08] text-white'
+            : 'text-white/40 hover:text-white/80 hover:bg-white/[0.03] border border-transparent'
+        }`
+      }
+    >
+      {content}
+      {open && item.badge > 0 && (
+        <span className="bg-white/10 text-white text-[9.5px] font-bold px-2 py-0.5 rounded-full border border-white/5 flex-shrink-0">
+          {item.badge}
+        </span>
+      )}
+    </NavLink>
+  )
+
+  if (!open) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {navLink}
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          {item.label}
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return navLink
 }
+
+function SidebarNavPlaceholder({ item, open }) {
+  const content = (
+    <div className={`flex items-center ${open ? 'gap-2.5' : 'justify-center w-full'}`}>
+      <item.icon size={16} className="text-white/40 group-hover:text-white/70 transition-colors" />
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.span
+            initial={{ opacity: 0, width: 0 }}
+            animate={{ opacity: 1, width: 'auto' }}
+            exit={{ opacity: 0, width: 0 }}
+            transition={{ duration: 0.15 }}
+            className="text-[13px] font-medium truncate"
+          >
+            {item.label}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+
+  const buttonElement = (
+    <button
+      onClick={() => alert(`${item.label} feature is coming soon!`)}
+      className={`flex items-center ${open ? 'justify-between px-3' : 'justify-center px-0 w-8 h-8 mx-auto'} h-8 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all duration-200 group text-left`}
+    >
+      {content}
+    </button>
+  )
+
+  if (!open) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {buttonElement}
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          {item.label}
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return buttonElement
+}
+
+// ── Sidebar Component ────────────────────────────────────────────────────────
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
+  const { open, toggleSidebar } = useSidebar()
   
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
@@ -97,87 +228,116 @@ export default function Sidebar() {
   ]
 
   return (
-    <aside className="w-[160px] flex-shrink-0 bg-[#050505] border-r border-white/[0.05] flex flex-col h-screen sticky top-0 overflow-hidden z-20">
+    <aside
+      className="flex-shrink-0 bg-[#050505] border-r border-white/[0.05] flex flex-col h-screen sticky top-0 overflow-hidden z-20"
+      style={{
+        width: open ? '160px' : '56px',
+        transition: 'width 200ms cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
+    >
       {/* Brand Header */}
-      <div className="h-12 flex items-center px-4 border-b border-white/[0.05] flex-shrink-0">
-        <div className="cursor-pointer" onClick={() => navigate('/dashboard')}>
-          <Logo />
+      <div className={`h-12 flex items-center ${open ? 'px-3 gap-2' : 'px-1.5 gap-1'} border-b border-white/[0.05] flex-shrink-0 overflow-hidden`}>
+        <button
+          onClick={toggleSidebar}
+          aria-label={open ? 'Collapse Sidebar' : 'Expand Sidebar'}
+          className="text-white/40 hover:text-white hover:bg-white/[0.05] p-1.5 rounded-lg transition-colors active:scale-95 flex-shrink-0"
+        >
+          {open ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        <div className="flex items-center gap-2 min-w-0 cursor-pointer" onClick={() => navigate('/dashboard')}>
+          {/* Logo icon */}
+          <svg width="18" height="18" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-white">
+            <path d="M16 2L2 9.5v13L16 30l14-7.5v-13L16 2zm11 19.3L16 26.8 5 20.8v-9.6l11-6 11 6v9.6z" fill="currentColor" />
+            <path d="M16 8.5L7.5 13 16 17.5 24.5 13 16 8.5z" fill="currentColor" className="opacity-80" />
+          </svg>
+          {open && (
+            <motion.span
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: 'auto' }}
+              exit={{ opacity: 0, width: 0 }}
+              transition={{ duration: 0.15 }}
+              className="font-bold text-[13.5px] text-white tracking-tight truncate"
+            >
+              DevKit AI
+            </motion.span>
+          )}
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-5 px-2 space-y-1 overflow-y-auto">
+      <nav className={`flex-1 py-5 ${open ? 'px-2' : 'px-1'} space-y-1 overflow-y-auto`}>
         {navItems.map((item) => {
           const isPlaceholder = item.to.startsWith('#')
           const isActive = location.pathname === item.to
 
-          const content = (
-            <div className="flex items-center gap-2.5">
-              <item.icon size={16} className={isActive ? 'text-white' : 'text-white/40 group-hover:text-white/70 transition-colors'} />
-              <span className="text-[13px] font-medium">{item.label}</span>
-            </div>
-          )
-
           if (isPlaceholder) {
             return (
-              <button
+              <SidebarNavPlaceholder
                 key={item.label}
-                onClick={() => alert(`${item.label} feature is coming soon!`)}
-                className="w-full flex items-center justify-between h-8 px-3 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all duration-150 group text-left"
-              >
-                {content}
-              </button>
+                item={item}
+                open={open}
+              />
             )
           }
 
           return (
-            <NavLink
+            <SidebarNavItem
               key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `flex items-center justify-between h-8 px-3 rounded-lg transition-all duration-150 group ${
-                  isActive
-                    ? 'bg-white/[0.07] border border-white/[0.08] text-white'
-                    : 'text-white/40 hover:text-white/80 hover:bg-white/[0.03] border border-transparent'
-                }`
-              }
-            >
-              {content}
-              {item.badge > 0 && (
-                <span className="bg-white/10 text-white text-[9.5px] font-bold px-2 py-0.5 rounded-full border border-white/5">
-                  {item.badge}
-                </span>
-              )}
-            </NavLink>
+              item={item}
+              open={open}
+              isActive={isActive}
+            />
           )
         })}
       </nav>
 
       {/* User Section (Profile Card) */}
-      <div className="p-3 border-t border-white/[0.05] flex-shrink-0 relative" ref={dropdownRef}>
+      <div className={`border-t border-white/[0.05] flex-shrink-0 relative ${open ? 'p-3' : 'py-3 px-1'}`} ref={dropdownRef}>
         {me ? (
           <>
             {/* User Profile Card */}
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/[0.03] active:scale-[0.98] transition-all duration-150 text-left group"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Avatar
-                  src={`https://github.com/${me.github_username}.png?size=64`}
-                  alt={me.github_username}
-                  size="sm"
-                  className="ring-1 ring-white/10 group-hover:ring-white/20 transition-all flex-shrink-0"
-                />
-                <div className="min-w-0 leading-tight">
-                  <div className="text-[12px] font-semibold text-white truncate">
-                    {me.github_username}
+            {open ? (
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/[0.03] active:scale-[0.98] transition-all duration-150 text-left group"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Avatar
+                    src={`https://github.com/${me.github_username}.png?size=64`}
+                    alt={me.github_username}
+                    size="sm"
+                    className="ring-1 ring-white/10 group-hover:ring-white/20 transition-all flex-shrink-0"
+                  />
+                  <div className="min-w-0 leading-tight">
+                    <div className="text-[12px] font-semibold text-white truncate">
+                      {me.github_username}
+                    </div>
+                    <div className="text-[10px] text-white/35 truncate mt-0.5">GitHub user</div>
                   </div>
-                  <div className="text-[10px] text-white/35 truncate mt-0.5">GitHub user</div>
                 </div>
-              </div>
-              <ChevronDown size={12} className={`text-white/35 flex-shrink-0 transition-all duration-150 ${dropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
+                <ChevronDown size={12} className={`text-white/35 flex-shrink-0 transition-all duration-150 ${dropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="w-8 h-8 rounded-lg hover:bg-white/[0.03] active:scale-[0.98] transition-all duration-150 flex items-center justify-center mx-auto p-0 group"
+                  >
+                    <Avatar
+                      src={`https://github.com/${me.github_username}.png?size=64`}
+                      alt={me.github_username}
+                      size="sm"
+                      className="ring-1 ring-white/10 group-hover:ring-white/20 transition-all flex-shrink-0"
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  {me.github_username}
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             {/* Dropdown Menu */}
             <AnimatePresence>
@@ -187,7 +347,9 @@ export default function Sidebar() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
                   transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="absolute bottom-16 left-2 right-2 bg-[#0A0A0A] border border-white/[0.08] rounded-xl shadow-2xl p-2 z-30 flex flex-col space-y-0.5 backdrop-blur-md"
+                  className={`absolute z-30 flex flex-col space-y-0.5 bg-[#0A0A0A] border border-white/[0.08] rounded-xl shadow-2xl p-2 backdrop-blur-md ${
+                    open ? 'bottom-16 left-2 right-2' : 'bottom-2 left-[60px] w-48'
+                  }`}
                 >
                   <button
                     onClick={() => {
@@ -217,9 +379,13 @@ export default function Sidebar() {
                   >
                     <div className="flex items-center gap-2.5">
                       {theme === 'light' ? <Sun size={14} /> : <Moon size={14} />}
-                      <span>Theme: {theme === 'light' ? 'Light' : 'Dark'}</span>
+                      {open ? (
+                        <span>Theme: {theme === 'light' ? 'Light' : 'Dark'}</span>
+                      ) : (
+                        <span>Theme</span>
+                      )}
                     </div>
-                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-wider bg-white/[0.05] px-1.5 py-0.5 rounded">
+                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-wider bg-white/[0.05] px-1.5 py-0.5 rounded flex-shrink-0">
                       Toggle
                     </div>
                   </button>
@@ -242,7 +408,7 @@ export default function Sidebar() {
             </AnimatePresence>
           </>
         ) : (
-          <div className="h-10" />
+          <div className={open ? 'h-10' : 'h-8'} />
         )}
       </div>
     </aside>

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
+    "@radix-ui/react-tooltip": "^1.2.12",
     "@tanstack/react-query": "^5.49.2",
     "axios": "^1.7.2",
     "framer-motion": "^12.42.0",
