@@ -229,23 +229,34 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="flex-shrink-0 bg-[#050505] border-r border-white/[0.05] flex flex-col h-screen sticky top-0 overflow-hidden z-20"
+      className="flex-shrink-0 bg-[#050505] border-r border-white/[0.02] flex flex-col h-screen sticky top-0 overflow-visible z-20"
       style={{
         width: open ? '160px' : '56px',
         transition: 'width 200ms cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       {/* Brand Header */}
-      <div className={`h-12 flex items-center ${open ? 'px-3 gap-2' : 'px-1.5 gap-1'} border-b border-white/[0.05] flex-shrink-0 overflow-hidden`}>
+      <div 
+        className="h-[52px] flex items-center border-b border-white/[0.02] flex-shrink-0 relative overflow-visible"
+      >
         <button
           onClick={toggleSidebar}
           aria-label={open ? 'Collapse Sidebar' : 'Expand Sidebar'}
-          className="text-white/40 hover:text-white hover:bg-white/[0.05] p-1.5 rounded-lg transition-colors active:scale-95 flex-shrink-0"
+          className={`text-white/40 hover:text-white hover:bg-white/[0.05] rounded-lg transition-all duration-200 active:scale-95 flex-shrink-0 absolute top-1/2 -translate-y-1/2 z-30 ${
+            open
+              ? 'p-1.5 left-3'
+              : 'p-1 left-[46px] bg-[#050505] border border-white/[0.08] hover:bg-white/[0.12] shadow-lg rounded-full'
+          }`}
         >
           {open ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
 
-        <div className="flex items-center gap-2 min-w-0 cursor-pointer" onClick={() => navigate('/dashboard')}>
+        <div 
+          className={`flex items-center min-w-0 cursor-pointer transition-all duration-200 ${
+            open ? 'pl-10 gap-2 justify-start' : 'pl-0 w-full justify-center'
+          }`} 
+          onClick={() => navigate('/dashboard')}
+        >
           {/* Logo icon */}
           <svg width="18" height="18" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 text-white">
             <path d="M16 2L2 9.5v13L16 30l14-7.5v-13L16 2zm11 19.3L16 26.8 5 20.8v-9.6l11-6 11 6v9.6z" fill="currentColor" />
@@ -293,7 +304,7 @@ export default function Sidebar() {
       </nav>
 
       {/* User Section (Profile Card) */}
-      <div className={`border-t border-white/[0.05] flex-shrink-0 relative ${open ? 'p-3' : 'py-3 px-1'}`} ref={dropdownRef}>
+      <div className={`border-t border-white/[0.02] flex-shrink-0 relative ${open ? 'p-3' : 'py-3 px-1'}`} ref={dropdownRef}>
         {me ? (
           <>
             {/* User Profile Card */}

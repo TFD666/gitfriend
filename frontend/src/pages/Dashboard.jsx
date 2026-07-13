@@ -15,14 +15,29 @@ import {
   GitBranch,
   Users,
   ChevronRight,
+  ChevronDown,
   TrendingUp,
+  TrendingDown,
+  Minus,
   X,
-  LayoutGrid,
 } from 'lucide-react'
 import { getProjects, connectRepo, triggerIndex } from '../api/projects'
 import { getMe, getStats, getActivity } from '../api/auth'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/DropdownMenu'
 
 
 function relativeTime(iso) {
@@ -65,17 +80,6 @@ function StatusBadge({ status }) {
   )
 }
 
-// ── Verdict badge ─────────────────────────────────────────────────────────────
-
-function VerdictBadge({ verdict }) {
-  const map = {
-    approve:         { bg: 'bg-[#0E2F1F] text-[#10B981]', label: 'Approve ✓' },
-    request_changes: { bg: 'bg-[#2D0F18] text-[#F43F5E]', label: 'Changes ✗' },
-    comment:         { bg: 'bg-white/5 text-white/60',      label: 'Comment' },
-  }
-  const { bg, label } = map[verdict] ?? { bg: 'bg-white/5 text-white/60', label: verdict }
-  return <span className={`inline-flex items-center px-1 py-px rounded text-[9px] font-medium ${bg}`}>{label}</span>
-}
 
 // ── Indeterminate bar ─────────────────────────────────────────────────────────
 
@@ -88,9 +92,11 @@ function IndeterminateBar() {
 }
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
-// Reference: large light number, small label below, tiny trend text. Good horizontal padding.
+// Supports three trend modes:
+//   noTrend  — show a static informational label (Chunks Indexed only)
+//   normal   — standard current vs prev percentage comparison
 
-function StatCard({ icon: Icon, label, value, trend, loading }) {
+function StatCard({ icon: Icon, label, value, prevValue, loading, noTrend = false, infoLabel = null }) {
   const [display, setDisplay] = useState(0)
   const raf = useRef(null)
 
@@ -106,6 +112,32 @@ function StatCard({ icon: Icon, label, value, trend, loading }) {
     return () => raf.current && cancelAnimationFrame(raf.current)
   }, [value, loading])
 
+  // Compute a single-line trend string + color.
+  // Returns null when in noTrend mode (informational label shown instead).
+  const trend = (() => {
+    if (noTrend) return null
+    if (loading || value == null) return null
+
+    // No historical data available at all
+    if (prevValue === undefined || prevValue === null) {
+      return { text: 'No previous data', icon: null, color: 'text-white/30' }
+    }
+
+    const curr = value
+    const prev = prevValue
+
+    // Divide-by-zero guard: prev is 0
+    if (prev === 0) {
+      if (curr > 0) return { text: '↗ +100% vs last week', icon: <TrendingUp size={10} />, color: 'text-[#10B981]' }
+      return { text: '\u2192 0% vs last week', icon: <Minus size={10} />, color: 'text-white/30' }
+    }
+
+    const pct = Math.round(((curr - prev) / prev) * 100)
+    if (pct > 0)  return { text: `↗ +${pct}% vs last week`, icon: <TrendingUp size={10} />, color: 'text-[#10B981]' }
+    if (pct < 0)  return { text: `↘ ${pct}% vs last week`, icon: <TrendingDown size={10} />, color: 'text-[#F43F5E]' }
+    return { text: '\u2192 0% vs last week', icon: <Minus size={10} />, color: 'text-white/30' }
+  })()
+
   return (
     <div className="flex-1 min-w-0 flex flex-col gap-2" style={{ padding: '20px 24px' }}>
       <div className="flex items-start justify-between">
@@ -118,9 +150,20 @@ function StatCard({ icon: Icon, label, value, trend, loading }) {
         <Icon size={15} className="text-white/25 mt-1 flex-shrink-0" />
       </div>
       <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>{label}</div>
-      <div className="flex items-center gap-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>
-        <TrendingUp size={10} className="text-[#10B981]" />
-        <span>↑ {trend}</span>
+
+      {/* Trend / info footer */}
+      <div className="flex items-center gap-1" style={{ fontSize: 11, minHeight: 16 }}>
+        {loading || value == null ? (
+          <div className="w-24 h-3 rounded bg-white/[0.03] animate-pulse" />
+        ) : noTrend ? (
+          // Static informational label for metrics where trend is not meaningful
+          <span style={{ color: 'rgba(255,255,255,0.28)' }}>{infoLabel ?? 'No trend data'}</span>
+        ) : trend ? (
+          <span className={`flex items-center gap-1 font-medium ${trend.color}`}>
+            {trend.icon && <span className={trend.color}>{trend.icon}</span>}
+            {trend.text}
+          </span>
+        ) : null}
       </div>
     </div>
   )
@@ -181,7 +224,6 @@ function ProjectCard({ project, isOwner, onRetry, retrying }) {
   const isFailed   = project.index_status === 'failed'
   const isReady    = project.index_status === 'ready'
   const repoName   = project.github_repo_full_name?.split('/')[1] ?? project.github_repo_full_name
-  const artifactLabels = { portfolio: 'Portfolio', resume_bullets: 'Resume', interview_prep: 'Interview Prep' }
 
   return (
     <div
@@ -271,19 +313,7 @@ function ProjectCard({ project, isOwner, onRetry, retrying }) {
         </div>
       ) : null}
 
-      {/* PR/artifact meta */}
-      {isReady && (project.last_pr_number != null || project.last_artifact_type) && (
-        <div className="border-t border-white/[0.03] flex items-center gap-3" style={{ padding: '6px 20px', fontSize: 10, color: 'rgba(255,255,255,0.28)' }}>
-          {project.last_pr_number != null && (
-            <div className="flex items-center gap-1">
-              <span>Last PR</span>
-              <span className="font-mono bg-white/[0.04] px-1 rounded" style={{ color: 'rgba(255,255,255,0.45)' }}>#{project.last_pr_number}</span>
-              {project.last_pr_verdict && <VerdictBadge verdict={project.last_pr_verdict} />}
-            </div>
-          )}
-          {project.last_artifact_type && <div>Last artifact: <span style={{ color: 'rgba(255,255,255,0.45)' }}>{artifactLabels[project.last_artifact_type] ?? project.last_artifact_type}</span></div>}
-        </div>
-      )}
+
     </div>
   )
 }
@@ -298,15 +328,35 @@ const ACTIVITY_ICONS = {
   health_analyzed:    { icon: Activity,        color: '#94A3B8', bg: 'rgba(148,163,184,0.15)', label: 'Health analyzed' },
 }
 
-function ActivityFeed({ data = [], isLoading, onViewAll }) {
+const filterLabels = {
+  all: 'All',
+  pr_reviews: 'PR Reviews',
+  diagrams: 'Diagrams',
+  artifacts: 'Artifacts',
+  team: 'Team Activity'
+}
+
+function ActivityFeed({ data = [], isLoading, filter = 'all', onFilterChange, onViewAll }) {
   return (
     <div className="flex flex-col h-full bg-[#0D0D0F] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.04] flex-shrink-0" style={{ padding: '14px 16px' }}>
+      <div className="flex items-center justify-between border-b border-white/[0.02] flex-shrink-0" style={{ padding: '14px 16px' }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Recent activity</span>
-        <span className="cursor-pointer hover:text-white transition-colors border border-white/[0.08] rounded" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', padding: '2px 8px' }}>
-          All ▾
-        </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-1 cursor-pointer hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.12] rounded bg-white/[0.02] px-2 py-0.5 text-[11px] font-medium text-white/50 focus:outline-none">
+              <span>{filterLabels[filter] || 'All'}</span>
+              <ChevronDown size={11} className="opacity-60" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuItem onClick={() => onFilterChange('all')}>All</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onFilterChange('pr_reviews')}>PR Reviews</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onFilterChange('diagrams')}>Diagrams</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onFilterChange('artifacts')}>Artifacts</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onFilterChange('team')}>Team Activity</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* List */}
@@ -326,7 +376,7 @@ function ActivityFeed({ data = [], isLoading, onViewAll }) {
         ) : !data || data.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <Database size={20} className="text-white/20 mb-2" />
-            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>No activity yet</span>
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>No activity found.</span>
           </div>
         ) : (
           <div className="divide-y divide-white/[0.03]">
@@ -356,7 +406,7 @@ function ActivityFeed({ data = [], isLoading, onViewAll }) {
       {/* Footer */}
       <button
         onClick={onViewAll}
-        className="flex items-center justify-between border-t border-white/[0.04] hover:bg-white/[0.02] transition-colors flex-shrink-0"
+        className="flex items-center justify-between border-t border-white/[0.02] hover:bg-white/[0.02] transition-colors flex-shrink-0"
         style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(255,255,255,0.45)' }}
       >
         <span>View all activity</span>
@@ -373,6 +423,20 @@ export default function Dashboard() {
   const navigate    = useNavigate()
   const [showModal, setShowModal]     = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // localStorage persisted states
+  const [sortBy, setSortBy] = useState(() => localStorage.getItem('dashboard_sort_by') || 'recent')
+  const [activityFilter, setActivityFilter] = useState(() => localStorage.getItem('dashboard_activity_filter') || 'all')
+
+  const handleSortChange = (val) => {
+    setSortBy(val)
+    localStorage.setItem('dashboard_sort_by', val)
+  }
+
+  const handleActivityFilterChange = (val) => {
+    setActivityFilter(val)
+    localStorage.setItem('dashboard_activity_filter', val)
+  }
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe })
 
@@ -398,26 +462,71 @@ export default function Dashboard() {
   }, [])
 
   const STATS = [
-    { icon: FolderGit2,     label: 'Projects',          key: 'project_count',    trend: '12% from last week' },
-    { icon: Database,       label: 'Chunks indexed',    key: 'total_chunks',     trend: '8% from last week' },
-    { icon: GitPullRequest, label: 'PRs reviewed',      key: 'pr_reviews_count', trend: '20% from last week' },
-    { icon: FileText,       label: 'Artifacts created', key: 'artifacts_count',  trend: '6% from last week' },
+    // Projects: cumulative count vs 7-day-ago count. created_at is immutable.
+    { icon: FolderGit2,     label: 'Projects',          key: 'project_count',       prevKey: 'project_count_prev',   noTrend: false },
+    // Chunks: live codebase size only. Trend removed — chunks are deleted/re-created on re-index.
+    { icon: Database,       label: 'Chunks indexed',    key: 'total_chunks',        prevKey: null,                   noTrend: true,  infoLabel: 'Tracks codebase size' },
+    // PRs: rolling 7-day window (this week vs prior week). reviewed_at is immutable.
+    { icon: GitPullRequest, label: 'PRs reviewed',      key: 'pr_reviews_this_week', prevKey: 'pr_reviews_prev_week', noTrend: false },
+    // Artifacts: rolling 7-day window using updated_at (refreshed on every regeneration).
+    { icon: FileText,       label: 'Artifact activity', key: 'artifacts_this_week', prevKey: 'artifacts_prev_week',  noTrend: false },
   ]
+
+  const allSharedStatus = projects.length > 0 && projects.every(p => p.index_status === projects[0].index_status)
 
   const filtered = projects.filter(p => {
     const q = searchQuery.toLowerCase().trim()
     return !q || (p.github_repo_full_name?.toLowerCase() || '').includes(q)
   })
 
+  const sortedProjects = [...filtered].sort((a, b) => {
+    if (sortBy === 'name_asc') {
+      return (a.github_repo_full_name || '').localeCompare(b.github_repo_full_name || '')
+    }
+    if (sortBy === 'name_desc') {
+      return (b.github_repo_full_name || '').localeCompare(a.github_repo_full_name || '')
+    }
+    if (sortBy === 'oldest') {
+      const da = a.created_at ? new Date(a.created_at).getTime() : 0
+      const db = b.created_at ? new Date(b.created_at).getTime() : 0
+      return da - db
+    }
+    if (sortBy === 'recently_indexed') {
+      const da = a.last_indexed_at ? new Date(a.last_indexed_at).getTime() : 0
+      const db = b.last_indexed_at ? new Date(b.last_indexed_at).getTime() : 0
+      return db - da
+    }
+    if (sortBy === 'status' && !allSharedStatus) {
+      const statusOrder = { ready: 1, indexing: 2, pending: 3, failed: 4 }
+      const sa = statusOrder[a.index_status] || 9
+      const sb = statusOrder[b.index_status] || 9
+      return sa - sb
+    }
+    // Default to 'recent' (created_at desc)
+    const da = a.created_at ? new Date(a.created_at).getTime() : 0
+    const db = b.created_at ? new Date(b.created_at).getTime() : 0
+    return db - da
+  })
+
+  const filteredActivity = (activity || []).filter(event => {
+    if (activityFilter === 'all') return true
+    if (activityFilter === 'pr_reviews') return event.type === 'pr_reviewed'
+    if (activityFilter === 'diagrams') return event.type === 'diagram_generated'
+    if (activityFilter === 'artifacts') return event.type === 'artifact_generated'
+    if (activityFilter === 'team') return event.type === 'team_activity' || event.type === 'team'
+    return false
+  })
+
   return (
     <div className="h-full bg-[#050505] text-white flex flex-col">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex-shrink-0 flex items-center border-b border-white/[0.05] sticky top-0 bg-[#050505]/90 backdrop-blur-md z-10" style={{ height: 52, padding: '0 20px' }}>
-        <div className="hidden md:block w-20 flex-shrink-0" />
+      <header className="flex-shrink-0 flex items-center border-b border-white/[0.02] sticky top-0 bg-[#050505]/90 backdrop-blur-md z-10" style={{ height: 52, padding: '0 20px' }}>
+        {/* Left block (desktop only) */}
+        <div className="hidden md:block md:flex-1" />
 
         {/* Search bar */}
-        <div className="relative flex-1" style={{ maxWidth: 460 }}>
+        <div className="relative w-full max-w-[460px] flex-1 md:flex-none">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
           <input
             id="dash-search"
@@ -434,11 +543,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Spacer to push button to the right */}
-        <div className="flex-1" />
+        {/* Spacer (mobile only) */}
+        <div className="flex-1 md:hidden" />
 
         {/* New project */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 md:flex-1 flex justify-end">
           <Button
             onClick={() => setShowModal(true)}
             variant="primary"
@@ -458,18 +567,19 @@ export default function Dashboard() {
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
           {/* Stats strip */}
-          <div className="border-b border-white/[0.05] flex-shrink-0">
+          <div className="border-b border-white/[0.02] flex-shrink-0">
             {/* Stat cards occupy full width */}
-            <div className="flex divide-x divide-white/[0.05] w-full">
-              {STATS.map(({ icon, label, key, trend }) => (
+            <div className="flex divide-x divide-white/[0.02] w-full">
+              {STATS.map(({ icon, label, key, prevKey, noTrend, infoLabel }) => (
                 <StatCard
                   key={key}
                   icon={icon}
                   label={label}
                   value={stats?.[key]}
-                  trend={trend}
+                  prevValue={prevKey ? stats?.[prevKey] : undefined}
                   loading={statsLoading}
-                  error={!!statsError}
+                  noTrend={noTrend}
+                  infoLabel={infoLabel}
                 />
               ))}
             </div>
@@ -481,17 +591,23 @@ export default function Dashboard() {
             {/* Section header */}
             <div className="flex items-center justify-between mb-4">
               <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>All projects</span>
-              <div className="flex items-center gap-3" style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-                <div className="flex items-center gap-1 cursor-pointer hover:text-white/70 transition-colors select-none">
-                  <span>Sort by:</span>
-                  <span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>Recent</span>
-                  <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white/40 text-xs font-semibold select-none">Sort by:</span>
+                  <Select value={sortBy} onValueChange={handleSortChange}>
+                    <SelectTrigger className="h-8 bg-transparent border-transparent px-2 text-white/70 hover:text-white font-semibold">
+                      <SelectValue placeholder="Recent" />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      <SelectItem value="recent">Recent</SelectItem>
+                      <SelectItem value="name_asc">Name A → Z</SelectItem>
+                      <SelectItem value="name_desc">Name Z → A</SelectItem>
+                      <SelectItem value="oldest">Oldest First</SelectItem>
+                      <SelectItem value="recently_indexed">Recently Indexed</SelectItem>
+                      {!allSharedStatus && <SelectItem value="status">Status</SelectItem>}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <button className="hover:text-white/70 transition-colors p-0.5">
-                  <LayoutGrid size={14} />
-                </button>
               </div>
             </div>
 
@@ -524,7 +640,7 @@ export default function Dashboard() {
             {/* Project cards */}
             {!isLoading && !error && projects.length > 0 && (
               <div className="flex flex-col gap-3">
-                {filtered.map(project => {
+                {sortedProjects.map(project => {
                   const isOwner = me && String(project.user_id) === String(me.id)
                   return (
                     <ProjectCard
@@ -557,10 +673,12 @@ export default function Dashboard() {
         </div>
 
         {/* Right panel: activity */}
-        <div className="flex-shrink-0 border-l border-white/[0.05] flex flex-col overflow-hidden" style={{ width: 260 }}>
+        <div className="flex-shrink-0 border-l border-white/[0.02] flex flex-col overflow-hidden" style={{ width: 260 }}>
           <ActivityFeed
-            data={activity}
+            data={filteredActivity}
             isLoading={activityLoading}
+            filter={activityFilter}
+            onFilterChange={handleActivityFilterChange}
             onViewAll={() => navigate('/invites')}
           />
         </div>

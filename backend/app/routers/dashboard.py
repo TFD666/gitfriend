@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -21,10 +21,27 @@ router = APIRouter(tags=["dashboard"])
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class StatsResponse(BaseModel):
+    # ── Projects ──────────────────────────────────────────────────────────────
+    # Cumulative count vs count before 7 days ago. created_at is immutable.
     project_count: int
+    project_count_prev: int | None = None
+
+    # ── Chunks ────────────────────────────────────────────────────────────────
+    # Live codebase size metric only — no trend. Chunks are deleted/re-created
+    # on every re-index so created_at does NOT represent historical growth.
     total_chunks: int
-    pr_reviews_count: int
-    artifacts_count: int
+
+    # ── PRs Reviewed ──────────────────────────────────────────────────────────
+    # Rolling 7-day window: reviews this week vs reviews the prior week.
+    # reviewed_at is immutable and set by the worker.
+    pr_reviews_this_week: int
+    pr_reviews_prev_week: int | None = None
+
+    # ── Artifacts ─────────────────────────────────────────────────────────────
+    # Activity metric: artifacts updated this week vs prior week.
+    # updated_at is refreshed on every regeneration via upsert.
+    artifacts_this_week: int
+    artifacts_prev_week: int | None = None
 
 
 class ActivityEvent(BaseModel):
@@ -42,37 +59,84 @@ async def get_stats(
     db: AsyncSession = Depends(get_db),
 ) -> StatsResponse:
     uid = current_user.id
+    now = datetime.now(timezone.utc)
+    one_week_ago  = now - timedelta(days=7)
+    two_weeks_ago = now - timedelta(days=14)
 
     # Owned project IDs subquery (reused across counts)
     owned_ids = select(Project.id).where(Project.user_id == uid).scalar_subquery()
 
+    # ── Projects ──────────────────────────────────────────────────────────────
+    # Cumulative count: how many projects exist now vs 7 days ago.
+    # created_at is immutable — never modified after insert.
     project_count_q = await db.execute(
         select(func.count()).where(Project.user_id == uid)
     )
     project_count = project_count_q.scalar_one()
 
+    project_count_prev_q = await db.execute(
+        select(func.count()).where(Project.user_id == uid, Project.created_at < one_week_ago)
+    )
+    project_count_prev = project_count_prev_q.scalar_one()
+
+    # ── Chunks Indexed ────────────────────────────────────────────────────────
+    # Live total only — no trend. Chunks are deleted and re-inserted on every
+    # re-index, so created_at reflects the last indexing run, NOT repository
+    # growth history. Any trend derived from it would be fabricated.
     chunks_q = await db.execute(
         select(func.count()).where(Chunk.project_id.in_(owned_ids))
     )
     total_chunks = chunks_q.scalar_one()
 
-    pr_q = await db.execute(
+    # ── PRs Reviewed ──────────────────────────────────────────────────────────
+    # Rolling 7-day window: distinct PRs reviewed this week vs the prior week.
+    # reviewed_at is set once by the PR review worker and never overwritten.
+    pr_this_week_q = await db.execute(
         select(func.count(PRReview.pr_number.distinct())).where(
-            PRReview.project_id.in_(owned_ids)
+            PRReview.project_id.in_(owned_ids),
+            PRReview.reviewed_at >= one_week_ago,
         )
     )
-    pr_reviews_count = pr_q.scalar_one()
+    pr_reviews_this_week = pr_this_week_q.scalar_one()
 
-    art_q = await db.execute(
-        select(func.count()).where(CareerArtifact.project_id.in_(owned_ids))
+    pr_prev_week_q = await db.execute(
+        select(func.count(PRReview.pr_number.distinct())).where(
+            PRReview.project_id.in_(owned_ids),
+            PRReview.reviewed_at >= two_weeks_ago,
+            PRReview.reviewed_at <  one_week_ago,
+        )
     )
-    artifacts_count = art_q.scalar_one()
+    pr_reviews_prev_week = pr_prev_week_q.scalar_one()
+
+    # ── Artifacts Activity ────────────────────────────────────────────────────
+    # Rolling 7-day window: artifacts updated this week vs the prior week.
+    # updated_at is refreshed on every regeneration (see career._upsert_artifact),
+    # so this captures both new creation and regeneration activity.
+    art_this_week_q = await db.execute(
+        select(func.count()).where(
+            CareerArtifact.project_id.in_(owned_ids),
+            CareerArtifact.updated_at >= one_week_ago,
+        )
+    )
+    artifacts_this_week = art_this_week_q.scalar_one()
+
+    art_prev_week_q = await db.execute(
+        select(func.count()).where(
+            CareerArtifact.project_id.in_(owned_ids),
+            CareerArtifact.updated_at >= two_weeks_ago,
+            CareerArtifact.updated_at <  one_week_ago,
+        )
+    )
+    artifacts_prev_week = art_prev_week_q.scalar_one()
 
     return StatsResponse(
         project_count=project_count,
+        project_count_prev=project_count_prev,
         total_chunks=total_chunks,
-        pr_reviews_count=pr_reviews_count,
-        artifacts_count=artifacts_count,
+        pr_reviews_this_week=pr_reviews_this_week,
+        pr_reviews_prev_week=pr_reviews_prev_week,
+        artifacts_this_week=artifacts_this_week,
+        artifacts_prev_week=artifacts_prev_week,
     )
 
 
