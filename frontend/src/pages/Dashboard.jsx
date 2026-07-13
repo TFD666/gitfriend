@@ -25,6 +25,7 @@ import { getProjects, connectRepo, triggerIndex } from '../api/projects'
 import { getMe, getStats, getActivity } from '../api/auth'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import brandBeacon from '../assets/brand_beacon.png'
 import {
   Select,
   SelectContent,
@@ -547,7 +548,15 @@ export default function Dashboard() {
         <div className="flex-1 md:hidden" />
 
         {/* New project */}
-        <div className="flex-shrink-0 md:flex-1 flex justify-end">
+        <div className="flex-shrink-0 md:flex-1 flex items-center justify-end gap-3">
+          {/* Brand beacon — hand-drawn GitHub mark, breathing animation */}
+          <img
+            src={brandBeacon}
+            alt=""
+            aria-hidden="true"
+            className="beacon-breathe select-none pointer-events-none"
+            style={{ width: 26, height: 26, opacity: 0.72 }}
+          />
           <Button
             onClick={() => setShowModal(true)}
             variant="primary"

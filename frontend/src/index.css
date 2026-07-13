@@ -217,12 +217,19 @@
   100% { background-position: 200% 0; }
 }
 
+/* Breathing pulse for the brand beacon — scale + opacity, never distracting */
+@keyframes beacon-breathe {
+  0%, 100% { transform: scale(1);    opacity: 0.72; }
+  50%       { transform: scale(1.05); opacity: 1;    }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .cursor-blink { animation: blink 1s step-end infinite; }
   .animate-slide-up { animation: slideUp 200ms ease-out forwards; }
   .animate-indeterminate { animation: indeterminate 1.5s ease-in-out infinite; }
   .animate-pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
   .activity-item { animation: activity-in 180ms ease-out both; }
+  .beacon-breathe { animation: beacon-breathe 3.5s ease-in-out infinite; }
 }
 
 /* ── Number input — remove spinner arrows ──────────────────────────────────── */
