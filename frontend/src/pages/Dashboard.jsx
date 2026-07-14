@@ -25,7 +25,7 @@ import { getProjects, connectRepo, triggerIndex } from '../api/projects'
 import { getMe, getStats, getActivity } from '../api/auth'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import brandBeacon from '../assets/brand_beacon.png'
+import GithubNavbarAnimation from '../components/GithubNavbarAnimation'
 import {
   Select,
   SelectContent,
@@ -67,10 +67,10 @@ function relativeIndexedTime(iso) {
 
 function StatusBadge({ status }) {
   const cfg = {
-    ready:    { color: '#10B981', label: 'Ready' },
+    ready: { color: '#10B981', label: 'Ready' },
     indexing: { color: '#F59E0B', label: 'Indexing', pulse: true },
-    pending:  { color: '#F59E0B', label: 'Queued',   pulse: true },
-    failed:   { color: '#F43F5E', label: 'Failed' },
+    pending: { color: '#F59E0B', label: 'Queued', pulse: true },
+    failed: { color: '#F43F5E', label: 'Failed' },
   }
   const { color, label, pulse } = cfg[status] ?? cfg.pending
   return (
@@ -134,8 +134,8 @@ function StatCard({ icon: Icon, label, value, prevValue, loading, noTrend = fals
     }
 
     const pct = Math.round(((curr - prev) / prev) * 100)
-    if (pct > 0)  return { text: `↗ +${pct}% vs last week`, icon: <TrendingUp size={10} />, color: 'text-[#10B981]' }
-    if (pct < 0)  return { text: `↘ ${pct}% vs last week`, icon: <TrendingDown size={10} />, color: 'text-[#F43F5E]' }
+    if (pct > 0) return { text: `↗ +${pct}% vs last week`, icon: <TrendingUp size={10} />, color: 'text-[#10B981]' }
+    if (pct < 0) return { text: `↘ ${pct}% vs last week`, icon: <TrendingDown size={10} />, color: 'text-[#F43F5E]' }
     return { text: '\u2192 0% vs last week', icon: <Minus size={10} />, color: 'text-white/30' }
   })()
 
@@ -145,8 +145,8 @@ function StatCard({ icon: Icon, label, value, prevValue, loading, noTrend = fals
         {loading
           ? <div className="w-10 h-8 rounded bg-white/[0.04] animate-pulse" />
           : <div style={{ fontSize: 30, fontWeight: 300, color: '#fff', lineHeight: 1, letterSpacing: '-0.02em' }}>
-              {display.toLocaleString()}
-            </div>
+            {display.toLocaleString()}
+          </div>
         }
         <Icon size={15} className="text-white/25 mt-1 flex-shrink-0" />
       </div>
@@ -222,9 +222,9 @@ function ConnectModal({ onClose }) {
 function ProjectCard({ project, isOwner, onRetry, retrying }) {
   const navigate = useNavigate()
   const isIndexing = project.index_status === 'indexing' || project.index_status === 'pending'
-  const isFailed   = project.index_status === 'failed'
-  const isReady    = project.index_status === 'ready'
-  const repoName   = project.github_repo_full_name?.split('/')[1] ?? project.github_repo_full_name
+  const isFailed = project.index_status === 'failed'
+  const isReady = project.index_status === 'ready'
+  const repoName = project.github_repo_full_name?.split('/')[1] ?? project.github_repo_full_name
 
   return (
     <div
@@ -322,11 +322,11 @@ function ProjectCard({ project, isOwner, onRetry, retrying }) {
 // ── Activity feed ─────────────────────────────────────────────────────────────
 
 const ACTIVITY_ICONS = {
-  pr_reviewed:        { icon: GitPullRequest, color: '#818CF8', bg: 'rgba(99,102,241,0.15)',  label: 'PR reviewed' },
-  diagram_generated:  { icon: GitBranch,      color: '#FB923C', bg: 'rgba(251,146,60,0.15)', label: 'Diagram generated' },
-  indexed:            { icon: Database,        color: '#34D399', bg: 'rgba(52,211,153,0.15)', label: 'Chunks indexed' },
-  artifact_generated: { icon: FileText,        color: '#2DD4BF', bg: 'rgba(45,212,191,0.15)', label: 'Artifact created' },
-  health_analyzed:    { icon: Activity,        color: '#94A3B8', bg: 'rgba(148,163,184,0.15)', label: 'Health analyzed' },
+  pr_reviewed: { icon: GitPullRequest, color: '#818CF8', bg: 'rgba(99,102,241,0.15)', label: 'PR reviewed' },
+  diagram_generated: { icon: GitBranch, color: '#FB923C', bg: 'rgba(251,146,60,0.15)', label: 'Diagram generated' },
+  indexed: { icon: Database, color: '#34D399', bg: 'rgba(52,211,153,0.15)', label: 'Chunks indexed' },
+  artifact_generated: { icon: FileText, color: '#2DD4BF', bg: 'rgba(45,212,191,0.15)', label: 'Artifact created' },
+  health_analyzed: { icon: Activity, color: '#94A3B8', bg: 'rgba(148,163,184,0.15)', label: 'Health analyzed' },
 }
 
 const filterLabels = {
@@ -421,8 +421,8 @@ function ActivityFeed({ data = [], isLoading, filter = 'all', onFilterChange, on
 
 export default function Dashboard() {
   const queryClient = useQueryClient()
-  const navigate    = useNavigate()
-  const [showModal, setShowModal]     = useState(false)
+  const navigate = useNavigate()
+  const [showModal, setShowModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
   // localStorage persisted states
@@ -444,7 +444,7 @@ export default function Dashboard() {
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
-    refetchInterval: q => q.state.data?.some(p => ['pending','indexing'].includes(p.index_status)) ? 3000 : false,
+    refetchInterval: q => q.state.data?.some(p => ['pending', 'indexing'].includes(p.index_status)) ? 3000 : false,
   })
 
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({ queryKey: ['stats'], queryFn: getStats })
@@ -464,13 +464,13 @@ export default function Dashboard() {
 
   const STATS = [
     // Projects: cumulative count vs 7-day-ago count. created_at is immutable.
-    { icon: FolderGit2,     label: 'Projects',          key: 'project_count',       prevKey: 'project_count_prev',   noTrend: false },
+    { icon: FolderGit2, label: 'Projects', key: 'project_count', prevKey: 'project_count_prev', noTrend: false },
     // Chunks: live codebase size only. Trend removed — chunks are deleted/re-created on re-index.
-    { icon: Database,       label: 'Chunks indexed',    key: 'total_chunks',        prevKey: null,                   noTrend: true,  infoLabel: 'Tracks codebase size' },
+    { icon: Database, label: 'Chunks indexed', key: 'total_chunks', prevKey: null, noTrend: true, infoLabel: 'Tracks codebase size' },
     // PRs: rolling 7-day window (this week vs prior week). reviewed_at is immutable.
-    { icon: GitPullRequest, label: 'PRs reviewed',      key: 'pr_reviews_this_week', prevKey: 'pr_reviews_prev_week', noTrend: false },
+    { icon: GitPullRequest, label: 'PRs reviewed', key: 'pr_reviews_this_week', prevKey: 'pr_reviews_prev_week', noTrend: false },
     // Artifacts: rolling 7-day window using updated_at (refreshed on every regeneration).
-    { icon: FileText,       label: 'Artifact activity', key: 'artifacts_this_week', prevKey: 'artifacts_prev_week',  noTrend: false },
+    { icon: FileText, label: 'Artifact activity', key: 'artifacts_this_week', prevKey: 'artifacts_prev_week', noTrend: false },
   ]
 
   const allSharedStatus = projects.length > 0 && projects.every(p => p.index_status === projects[0].index_status)
@@ -548,22 +548,16 @@ export default function Dashboard() {
         <div className="flex-1 md:hidden" />
 
         {/* New project */}
-        <div className="flex-shrink-0 md:flex-1 flex items-center justify-end gap-3">
-          {/* Brand beacon — hand-drawn GitHub mark, breathing animation */}
-          <img
-            src={brandBeacon}
-            alt=""
-            aria-hidden="true"
-            className="beacon-breathe select-none pointer-events-none"
-            style={{ width: 26, height: 26, opacity: 0.72 }}
-          />
+        <div className="flex-shrink-0 md:flex-1 flex items-center justify-end gap-0">
+          {/* Brand beacon — hand-drawn GitHub mark, animated loop */}
+          <GithubNavbarAnimation />
           <Button
             onClick={() => setShowModal(true)}
             variant="primary"
-            className="h-[34px] px-4 text-xs font-semibold shadow-sm"
+            className="h-[34px] px-0.6 text-xs font-semibold shadow-sm"
             style={{ borderRadius: 'var(--radius-md)' }}
           >
-            <Plus size={13} className="mr-1.5" />
+            <Plus size={13} className="mr-0" />
             <span>New project</span>
           </Button>
         </div>
