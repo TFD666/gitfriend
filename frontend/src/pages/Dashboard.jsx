@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -26,6 +27,7 @@ import { getMe, getStats, getActivity } from '../api/auth'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import GithubNavbarAnimation from '../components/GithubNavbarAnimation'
+import blackHoleFrame from '../assets/black_hole_frame.png'
 import {
   Select,
   SelectContent,
@@ -339,7 +341,7 @@ const filterLabels = {
 
 function ActivityFeed({ data = [], isLoading, filter = 'all', onFilterChange, onViewAll }) {
   return (
-    <div className="flex flex-col h-full bg-[#0D0D0F] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#0D0D0F]/80 backdrop-blur-md overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-white/[0.02] flex-shrink-0" style={{ padding: '14px 16px' }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Recent activity</span>
@@ -425,6 +427,8 @@ export default function Dashboard() {
   const [showModal, setShowModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Background video hooks removed for performance and static image replacement
+
   // localStorage persisted states
   const [sortBy, setSortBy] = useState(() => localStorage.getItem('dashboard_sort_by') || 'recent')
   const [activityFilter, setActivityFilter] = useState(() => localStorage.getItem('dashboard_activity_filter') || 'all')
@@ -462,7 +466,7 @@ export default function Dashboard() {
     return () => window.removeEventListener('keydown', fn)
   }, [])
 
-  const STATS = [
+const STATS = [
     // Projects: cumulative count vs 7-day-ago count. created_at is immutable.
     { icon: FolderGit2, label: 'Projects', key: 'project_count', prevKey: 'project_count_prev', noTrend: false },
     // Chunks: live codebase size only. Trend removed — chunks are deleted/re-created on re-index.
@@ -519,10 +523,43 @@ export default function Dashboard() {
   })
 
   return (
-    <div className="h-full bg-[#050505] text-white flex flex-col">
+    <div className="h-full text-white flex flex-col relative overflow-hidden">
 
+      {/* Background Artwork Layer (Static Image) */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          overflow: 'hidden',
+          pointerEvents: 'none',
+        }}
+      >
+        <img
+          src={blackHoleFrame}
+          alt=""
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: '35% 20%',
+            opacity: 0.65,
+            filter: 'blur(3px)',
+            transform: 'rotate(90deg) scale(1.15)',
+            transformOrigin: 'center center',
+          }}
+        />
+        {/* Dark overlay layer above the image */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'radial-gradient(circle at 35% 30%, transparent 45%, rgba(0, 0, 0, 0.45) 95%)',
+          }}
+        />
+      </div>
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex-shrink-0 flex items-center border-b border-white/[0.02] sticky top-0 bg-[#050505]/90 backdrop-blur-md z-10" style={{ height: 52, padding: '0 20px' }}>
+      <header className="flex-shrink-0 flex items-center border-b border-white/[0.02] sticky top-0 bg-[#050505]/60 backdrop-blur-md z-[10]" style={{ height: 52, padding: '0 20px' }}>
         {/* Left block (desktop only) */}
         <div className="hidden md:block md:flex-1" />
 
@@ -564,10 +601,11 @@ export default function Dashboard() {
       </header>
 
       {/* ── Main ───────────────────────────────────────────────────────── */}
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex overflow-hidden relative z-10">
 
         {/* Left column */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
 
           {/* Stats strip */}
           <div className="border-b border-white/[0.02] flex-shrink-0">

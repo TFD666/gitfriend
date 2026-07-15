@@ -229,7 +229,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="flex-shrink-0 bg-[#050505] border-r border-white/[0.02] flex flex-col h-screen sticky top-0 overflow-visible z-20"
+      className="flex-shrink-0 bg-black border-r border-white/[0.04] flex flex-col h-screen sticky top-0 overflow-visible z-20"
       style={{
         width: open ? '160px' : '56px',
         transition: 'width 200ms cubic-bezier(0.4, 0, 0.2, 1)',
