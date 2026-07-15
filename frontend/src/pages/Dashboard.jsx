@@ -27,7 +27,7 @@ import { getMe, getStats, getActivity } from '../api/auth'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import GithubNavbarAnimation from '../components/GithubNavbarAnimation'
-import blackHoleFrame from '../assets/black_hole_frame.png'
+import backgroundImage from '../assets/backgroundimage.png'
 import {
   Select,
   SelectContent,
@@ -525,7 +525,7 @@ const STATS = [
   return (
     <div className="h-full text-white flex flex-col relative overflow-hidden">
 
-      {/* Background Artwork Layer (Static Image) */}
+      {/* Background Artwork Layer */}
       <div
         style={{
           position: 'absolute',
@@ -535,26 +535,50 @@ const STATS = [
           pointerEvents: 'none',
         }}
       >
+        {/*
+          Analytical positioning (1280×800 viewport, 1220×748 content):
+          Image 495×865 at height:120% → rendered 900px×515px
+          Scale factor S = 900/865 = 1.040
+          Ring center source (380, 155) → rendered (395, 161) from image origin
+          left:46% → image starts at 561px → ring lands at 561+395=956px (78% of 1220) ✓
+          Convergence source (300, 340) → rendered (312, 354) → dashboard (873, 350) = 72% x, 47% y ✓
+          Stream source (150-270, 80-560) → dashboard (717-841, 83-583) = 59-69% x ✓
+          Planet source (335, 510) → rendered (348, 530) → dashboard (909, 526) = 75% x, 70% y ✓
+        */}
         <img
-          src={blackHoleFrame}
+          src={backgroundImage}
           alt=""
           style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            objectPosition: '35% 20%',
-            opacity: 0.65,
-            filter: 'blur(3px)',
-            transform: 'rotate(90deg) scale(1.15)',
-            transformOrigin: 'center center',
+            position: 'absolute',
+            left: '46%',
+            top: '-4%',
+            height: '120%',
+            width: 'auto',
+            opacity: 0.68,
           }}
         />
-        {/* Dark overlay layer above the image */}
+        {/* Left blend: fully opaque through image left edge (46%), then wide feather to transparent */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'radial-gradient(circle at 35% 30%, transparent 45%, rgba(0, 0, 0, 0.45) 95%)',
+            background: 'linear-gradient(to right, rgba(5,5,5,1) 0%, rgba(5,5,5,1) 47%, rgba(5,5,5,0.65) 58%, rgba(5,5,5,0.12) 70%, transparent 82%)',
+          }}
+        />
+        {/* Right blend: fade image's right edge back into dark panel background */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to left, rgba(5,5,5,0.70) 0%, transparent 22%)',
+          }}
+        />
+        {/* Top darkener for header readability */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(to bottom, rgba(5,5,5,0.80) 0%, transparent 11%)',
           }}
         />
       </div>
