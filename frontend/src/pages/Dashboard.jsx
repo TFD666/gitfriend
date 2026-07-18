@@ -28,6 +28,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import GithubNavbarAnimation from '../components/GithubNavbarAnimation'
 import backgroundImage from '../assets/backgroundimage.png'
+import backgroundVideo from '../assets/animatedvideo2.webm'
 import {
   Select,
   SelectContent,
@@ -545,9 +546,13 @@ const STATS = [
           Stream source (150-270, 80-560) → dashboard (717-841, 83-583) = 59-69% x ✓
           Planet source (335, 510) → rendered (348, 530) → dashboard (909, 526) = 75% x, 70% y ✓
         */}
-        <img
-          src={backgroundImage}
-          alt=""
+        <video
+          src={backgroundVideo}
+          autoPlay
+          loop
+          muted
+          playsInline
+          poster={backgroundImage}
           style={{
             position: 'absolute',
             left: '46%',
