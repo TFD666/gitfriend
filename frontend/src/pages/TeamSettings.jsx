@@ -13,7 +13,14 @@ import {
 import { useProjectRole } from '../hooks/useProjectRole'
 import ViewerBanner from '../components/ui/ViewerBanner'
 import Badge from '../components/ui/Badge'
-import { Users, Trash2, ShieldAlert, Plus, Send, UserCheck } from 'lucide-react'
+import { Users, Trash2, ShieldAlert, Plus, Send } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
 
 function RoleBadge({ role }) {
   const configs = {
@@ -113,33 +120,11 @@ function SharingToggles({ project, isOwner }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <div>
-          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>Feature Sharing</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
-            Control which features team members can access and their permissions.
-          </p>
-        </div>
-        <button
-          onClick={() => alert('Role management options coming soon!')}
-          style={{
-            background: 'transparent',
-            color: 'var(--text-primary)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
-            padding: '6px 12px',
-            fontSize: '13px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            flexShrink: 0,
-          }}
-        >
-          <UserCheck size={14} />
-          Manage roles
-        </button>
+      <div style={{ marginBottom: '16px' }}>
+        <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>Feature Sharing</h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+          Control which features team members can access and their permissions.
+        </p>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -235,25 +220,15 @@ function InviteForm({ projectId }) {
           className="input"
           style={{ flex: 1, height: '36px', padding: '6px 12px' }}
         />
-        <select
-          value={role}
-          onChange={e => setRole(e.target.value)}
-          className="input"
-          style={{
-            background: 'var(--bg-subtle)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
-            padding: '0 12px',
-            fontSize: '13px',
-            color: 'var(--text-primary)',
-            outline: 'none',
-            width: '110px',
-            height: '36px',
-          }}
-        >
-          <option value="viewer">Viewer</option>
-          <option value="editor">Editor</option>
-        </select>
+        <Select value={role} onValueChange={setRole}>
+          <SelectTrigger className="w-[100px] h-9 text-xs font-semibold bg-white/[0.04]">
+            <SelectValue placeholder="Role" />
+          </SelectTrigger>
+          <SelectContent align="end">
+            <SelectItem value="viewer">Viewer</SelectItem>
+            <SelectItem value="editor">Editor</SelectItem>
+          </SelectContent>
+        </Select>
         <button
           type="submit"
           disabled={!username.trim() || mutation.isPending}
@@ -314,8 +289,8 @@ function MemberRow({ member, isOwner, currentUserId, projectId }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
         <UserAvatar username={member.user.github_username} />
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', lineHeight: 1 }}>
             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {member.user.github_username}
             </span>
@@ -325,33 +300,27 @@ function MemberRow({ member, isOwner, currentUserId, projectId }) {
               <span style={{ fontSize: '11px', color: 'var(--warning)', fontStyle: 'italic' }}>invite pending</span>
             )}
           </div>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.2 }}>
             {member.user.github_username}
           </span>
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <select
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', height: '36px' }}>
+        <Select
           value={member.role}
           disabled={!isOwner || isSelf || roleMutation.isPending}
-          onChange={(e) => roleMutation.mutate(e.target.value)}
-          style={{
-            background: 'var(--bg-subtle)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
-            padding: '4px 10px',
-            fontSize: '12px',
-            color: 'var(--text-primary)',
-            outline: 'none',
-            cursor: (!isOwner || isSelf || roleMutation.isPending) ? 'default' : 'pointer',
-            opacity: (!isOwner || isSelf) ? 0.7 : 1,
-          }}
+          onValueChange={(val) => roleMutation.mutate(val)}
         >
-          <option value="owner">Owner</option>
-          <option value="editor">Editor</option>
-          <option value="viewer">Viewer</option>
-        </select>
+          <SelectTrigger className="w-[100px] h-8 text-xs font-semibold bg-white/[0.04]">
+            <SelectValue placeholder="Select role" />
+          </SelectTrigger>
+          <SelectContent align="end">
+            <SelectItem value="owner">Owner</SelectItem>
+            <SelectItem value="editor">Editor</SelectItem>
+            <SelectItem value="viewer">Viewer</SelectItem>
+          </SelectContent>
+        </Select>
 
         {canRemove && (
           <button
@@ -359,12 +328,15 @@ function MemberRow({ member, isOwner, currentUserId, projectId }) {
             disabled={removeMutation.isPending}
             className="btn-ghost"
             style={{
-              padding: '4px 8px',
+              height: '32px',
+              padding: '0 8px',
               fontSize: '12px',
               color: 'var(--text-secondary)',
               display: 'inline-flex',
               alignItems: 'center',
+              justifyContent: 'center',
               gap: '4px',
+              boxSizing: 'border-box',
             }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
@@ -433,7 +405,7 @@ export default function TeamSettings() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg-base)', display: 'flex', flexDirection: 'column' }}>
       {/* Viewer banner */}
       {isViewer && <ViewerBanner />}
 
@@ -528,36 +500,29 @@ export default function TeamSettings() {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <UserAvatar username={roster?.owner?.github_username} />
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', lineHeight: 1 }}>
                     <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
                       {roster?.owner?.github_username}
                     </span>
                     {isOwner && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(you)</span>}
                     <RoleBadge role="owner" />
                   </div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.2 }}>
                     {roster?.owner?.github_username}
                   </span>
                 </div>
               </div>
-              <select
-                disabled
-                value="owner"
-                style={{
-                  background: 'var(--bg-subtle)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '4px 10px',
-                  fontSize: '12px',
-                  color: 'var(--text-primary)',
-                  outline: 'none',
-                  opacity: 0.7,
-                  cursor: 'not-allowed',
-                }}
-              >
-                <option value="owner">Owner</option>
-              </select>
+              <div style={{ display: 'flex', alignItems: 'center', height: '36px' }}>
+                <Select disabled value="owner">
+                  <SelectTrigger className="w-[100px] h-8 text-xs font-semibold bg-white/[0.04]">
+                    <SelectValue placeholder="Owner" />
+                  </SelectTrigger>
+                  <SelectContent align="end">
+                    <SelectItem value="owner">Owner</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </li>
 
             {/* Team members list */}
