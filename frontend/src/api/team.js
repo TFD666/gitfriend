@@ -14,6 +14,11 @@ export async function removeMember(projectId, memberId) {
   await client.delete(`/api/v1/projects/${projectId}/team/${memberId}`)
 }
 
+export async function updateMemberRole(projectId, memberId, role) {
+  const { data } = await client.patch(`/api/v1/projects/${projectId}/team/${memberId}`, { role })
+  return data
+}
+
 export async function updateSharing(projectId, flags) {
   const { data } = await client.patch(`/api/v1/projects/${projectId}/settings/sharing`, flags)
   return data

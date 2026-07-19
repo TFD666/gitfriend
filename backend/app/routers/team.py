@@ -225,6 +225,51 @@ async def remove_team_member(
 
 
 # ---------------------------------------------------------------------------
+# /projects/{id}/team/{team_member_id}  — update member role
+# ---------------------------------------------------------------------------
+
+class UpdateMemberRoleRequest(BaseModel):
+    role: str
+
+
+@projects_router.patch("/{project_id}/team/{team_member_id}", response_model=TeamMemberResponse)
+async def update_team_member_role(
+    project_id: uuid.UUID,
+    team_member_id: uuid.UUID,
+    body: UpdateMemberRoleRequest,
+    project: Project = Depends(require_project_access("owner")),
+    db: AsyncSession = Depends(get_db),
+) -> TeamMemberResponse:
+    role = _validate_role(body.role)
+
+    result = await db.execute(
+        select(TeamMember, User)
+        .join(User, User.id == TeamMember.user_id)
+        .where(
+            TeamMember.id == team_member_id,
+            TeamMember.project_id == project_id,
+        )
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Team member not found")
+
+    member, user = row
+    member.role = role
+    await db.commit()
+    await db.refresh(member)
+
+    return TeamMemberResponse(
+        id=member.id,
+        user=UserInfo(id=user.id, github_username=user.github_username),
+        role=member.role,
+        status=member.status,
+        invited_at=member.invited_at,
+        accepted_at=member.accepted_at,
+    )
+
+
+# ---------------------------------------------------------------------------
 # /projects/{id}/settings/sharing  — owner toggles sharing flags
 # ---------------------------------------------------------------------------
 

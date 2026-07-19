@@ -7,18 +7,19 @@ import {
   getTeamRoster,
   inviteMember,
   removeMember,
+  updateMemberRole,
   updateSharing,
 } from '../api/team'
 import { useProjectRole } from '../hooks/useProjectRole'
 import ViewerBanner from '../components/ui/ViewerBanner'
 import Badge from '../components/ui/Badge'
-import { Users, UserMinus, ShieldAlert } from 'lucide-react'
+import { Users, Trash2, ShieldAlert, Plus, Send, UserCheck } from 'lucide-react'
 
 function RoleBadge({ role }) {
   const configs = {
-    owner:  { variant: 'accent',  label: 'owner' },
-    editor: { variant: 'info',    label: 'editor' },
-    viewer: { variant: 'neutral', label: 'viewer' },
+    owner:  { variant: 'accent',  label: 'Owner' },
+    editor: { variant: 'info',    label: 'Editor' },
+    viewer: { variant: 'neutral', label: 'Viewer' },
   }
   const { variant, label } = configs[role] ?? { variant: 'neutral', label: role }
   return (
@@ -28,21 +29,27 @@ function RoleBadge({ role }) {
   )
 }
 
-function StatusDot({ status }) {
-  const color = status === 'active' ? 'var(--success)' : 'var(--warning)'
+function UserAvatar({ username }) {
+  const initial = (username || '?')[0].toUpperCase()
   return (
-    <span
+    <div
       style={{
-        width: '6px',
-        height: '6px',
+        width: '36px',
+        height: '36px',
         borderRadius: '50%',
-        background: color,
-        display: 'inline-block',
-        marginRight: '8px',
+        background: '#18181b',
+        border: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '13px',
+        fontWeight: 600,
+        color: '#ffffff',
         flexShrink: 0,
       }}
-      title={status}
-    />
+    >
+      {initial}
+    </div>
   )
 }
 
@@ -76,35 +83,83 @@ function SharingToggles({ project, isOwner }) {
     mutation.mutate(next)
   }
 
-  const labels = {
-    mentor_chat_shared: 'Mentor Chat',
-    career_mode_shared: 'Career Mode',
-    repo_health_shared: 'Repo Health',
-    diagrams_shared:    'Diagrams',
-    pr_review_shared:   'PR Review',
-  }
+  const features = [
+    {
+      key: 'mentor_chat_shared',
+      label: 'Mentor Chat',
+      desc: 'Allow access to AI mentor conversations',
+    },
+    {
+      key: 'career_mode_shared',
+      label: 'Career Mode',
+      desc: 'Allow access to career guidance features',
+    },
+    {
+      key: 'repo_health_shared',
+      label: 'Repo Health',
+      desc: 'Allow access to repository health insights',
+    },
+    {
+      key: 'diagrams_shared',
+      label: 'Diagrams',
+      desc: 'Allow access to diagrams and visualizations',
+    },
+    {
+      key: 'pr_review_shared',
+      label: 'PR Review',
+      desc: 'Allow access to PR review features',
+    },
+  ]
 
   return (
     <div>
-      <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>Feature sharing</h3>
-      <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px 0' }}>
-        Control which features team members can access. Members also need the right role for write actions.
-      </p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>Feature Sharing</h3>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+            Control which features team members can access and their permissions.
+          </p>
+        </div>
+        <button
+          onClick={() => alert('Role management options coming soon!')}
+          style={{
+            background: 'transparent',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '6px 12px',
+            fontSize: '13px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            flexShrink: 0,
+          }}
+        >
+          <UserCheck size={14} />
+          Manage roles
+        </button>
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {Object.entries(labels).map(([key, label]) => (
+        {features.map(({ key, label, desc }) => (
           <div
             key={key}
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '12px 14px',
+              padding: '14px 16px',
               background: 'var(--bg-subtle)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-md)',
             }}
           >
-            <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{label}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 600, width: '120px' }}>{label}</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{desc}</span>
+            </div>
             <button
               onClick={() => toggle(key)}
               disabled={!isOwner || mutation.isPending}
@@ -119,6 +174,7 @@ function SharingToggles({ project, isOwner }) {
                 outline: 'none',
                 transition: 'background 200ms ease, opacity 200ms ease',
                 opacity: (!isOwner) ? 0.5 : 1,
+                flexShrink: 0,
               }}
             >
               <span
@@ -171,9 +227,9 @@ function InviteForm({ projectId }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <input
-          placeholder="GitHub username"
+          placeholder="Enter GitHub username"
           value={username}
           onChange={e => { setUsername(e.target.value); setError(null) }}
           className="input"
@@ -201,9 +257,25 @@ function InviteForm({ projectId }) {
         <button
           type="submit"
           disabled={!username.trim() || mutation.isPending}
-          className="btn-primary"
-          style={{ padding: '0 16px', height: '36px', fontSize: '13px', flexShrink: 0 }}
+          style={{
+            background: '#ffffff',
+            color: '#000000',
+            fontWeight: 600,
+            fontSize: '13px',
+            padding: '0 16px',
+            height: '36px',
+            borderRadius: 'var(--radius-md)',
+            border: 'none',
+            cursor: (!username.trim() || mutation.isPending) ? 'not-allowed' : 'pointer',
+            opacity: (!username.trim() || mutation.isPending) ? 0.6 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            flexShrink: 0,
+            transition: 'background 150ms ease, opacity 150ms ease',
+          }}
         >
+          <Send size={13} />
           {mutation.isPending ? 'Inviting…' : 'Invite'}
         </button>
       </div>
@@ -217,8 +289,13 @@ function MemberRow({ member, isOwner, currentUserId, projectId }) {
   const isSelf = member.user.id === currentUserId
   const canRemove = isOwner || isSelf
 
-  const mutation = useMutation({
+  const removeMutation = useMutation({
     mutationFn: () => removeMember(projectId, member.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['team', projectId] }),
+  })
+
+  const roleMutation = useMutation({
+    mutationFn: (newRole) => updateMemberRole(projectId, member.id, newRole),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['team', projectId] }),
   })
 
@@ -235,35 +312,68 @@ function MemberRow({ member, isOwner, currentUserId, projectId }) {
       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-        <StatusDot status={member.status} />
-        <span className="mono" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {member.user.github_username}
-        </span>
-        {isSelf && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(you)</span>}
-        <RoleBadge role={member.role} />
-        {member.status === 'pending' && (
-          <span style={{ fontSize: '11px', color: 'var(--warning)', fontStyle: 'italic' }}>invite pending</span>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+        <UserAvatar username={member.user.github_username} />
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {member.user.github_username}
+            </span>
+            {isSelf && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(you)</span>}
+            <RoleBadge role={member.role} />
+            {member.status === 'pending' && (
+              <span style={{ fontSize: '11px', color: 'var(--warning)', fontStyle: 'italic' }}>invite pending</span>
+            )}
+          </div>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+            {member.user.github_username}
+          </span>
+        </div>
       </div>
-      {canRemove && (
-        <button
-          onClick={() => mutation.mutate()}
-          disabled={mutation.isPending}
-          className="btn-ghost"
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <select
+          value={member.role}
+          disabled={!isOwner || isSelf || roleMutation.isPending}
+          onChange={(e) => roleMutation.mutate(e.target.value)}
           style={{
-            padding: '4px 8px',
+            background: 'var(--bg-subtle)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '4px 10px',
             fontSize: '12px',
-            color: 'var(--danger)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
+            color: 'var(--text-primary)',
+            outline: 'none',
+            cursor: (!isOwner || isSelf || roleMutation.isPending) ? 'default' : 'pointer',
+            opacity: (!isOwner || isSelf) ? 0.7 : 1,
           }}
         >
-          <UserMinus size={13} />
-          {isSelf && !isOwner ? 'Leave' : 'Remove'}
-        </button>
-      )}
+          <option value="owner">Owner</option>
+          <option value="editor">Editor</option>
+          <option value="viewer">Viewer</option>
+        </select>
+
+        {canRemove && (
+          <button
+            onClick={() => removeMutation.mutate()}
+            disabled={removeMutation.isPending}
+            className="btn-ghost"
+            style={{
+              padding: '4px 8px',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+          >
+            <Trash2 size={13} />
+            {isSelf && !isOwner ? 'Leave' : 'Remove'}
+          </button>
+        )}
+      </div>
     </li>
   )
 }
@@ -273,6 +383,7 @@ export default function TeamSettings() {
   const navigate = useNavigate()
   const role = useProjectRole(projectId)
   const isViewer = role === 'viewer'
+  const [showInviteForm, setShowInviteForm] = useState(false)
 
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: getMe })
   const { data: project, isLoading: projLoading, error: projError } = useQuery({
@@ -369,9 +480,39 @@ export default function TeamSettings() {
             marginBottom: '20px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <Users size={16} style={{ color: 'var(--text-secondary)' }} />
-            <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Team Members</h2>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <Users size={16} style={{ color: 'var(--text-secondary)' }} />
+                <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Team Members</h2>
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+                Manage who has access to this project
+              </p>
+            </div>
+
+            {isOwner && (
+              <button
+                onClick={() => setShowInviteForm(prev => !prev)}
+                style={{
+                  background: '#ffffff',
+                  color: '#000000',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  padding: '8px 16px',
+                  borderRadius: 'var(--radius-md)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  flexShrink: 0,
+                }}
+              >
+                <Plus size={14} />
+                Invite collaborator
+              </button>
+            )}
           </div>
 
           <ul style={{ listStyle: 'none', padding: 0, margin: '0 -20px', borderTop: '1px solid var(--border-subtle)' }}>
@@ -385,14 +526,38 @@ export default function TeamSettings() {
                 borderBottom: '1px solid var(--border-subtle)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block', marginRight: '8px' }} />
-                <span className="mono" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {roster?.owner?.github_username}
-                </span>
-                {isOwner && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(you)</span>}
-                <RoleBadge role="owner" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <UserAvatar username={roster?.owner?.github_username} />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {roster?.owner?.github_username}
+                    </span>
+                    {isOwner && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>(you)</span>}
+                    <RoleBadge role="owner" />
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                    {roster?.owner?.github_username}
+                  </span>
+                </div>
               </div>
+              <select
+                disabled
+                value="owner"
+                style={{
+                  background: 'var(--bg-subtle)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                  opacity: 0.7,
+                  cursor: 'not-allowed',
+                }}
+              >
+                <option value="owner">Owner</option>
+              </select>
             </li>
 
             {/* Team members list */}
@@ -413,8 +578,8 @@ export default function TeamSettings() {
             )}
           </ul>
 
-          {/* Invite form — owner only */}
-          {isOwner && (
+          {/* Invite form — owner only, collapsible */}
+          {isOwner && showInviteForm && (
             <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-subtle)', paddingTop: '20px' }}>
               <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 2px 0' }}>Invite Collaborator</h3>
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>Send an invitation link to a collaborator by GitHub username.</p>
