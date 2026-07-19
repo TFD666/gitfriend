@@ -28,7 +28,7 @@ export default function GithubNavbarAnimation() {
         videoRef.current.pause()
       }
 
-      // Wait 30 seconds before restarting the animation
+      // Wait 10 seconds before restarting the animation
       timeoutRef.current = setTimeout(() => {
         const currentVideo = videoRef.current
         if (currentVideo) {
@@ -37,7 +37,7 @@ export default function GithubNavbarAnimation() {
             console.warn('Playback prevented by browser autoplay policy', err)
           })
         }
-      }, 30000)
+      }, 10000)
     }
 
     video.addEventListener('ended', handleEnded)

@@ -21,8 +21,18 @@ import {
   TrendingDown,
   Minus,
   X,
+  // Project icon pool
+  Code2,
+  Terminal,
+  Server,
+  BarChart2,
+  Folder,
+  Box,
+  Layers,
+  Puzzle,
+  ClipboardList,
 } from 'lucide-react'
-import { getProjects, connectRepo, triggerIndex } from '../api/projects'
+import { getProjects, connectRepo, triggerIndex, COLOR_HEX } from '../api/projects'
 import { getMe, getStats, getActivity } from '../api/auth'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -42,6 +52,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../components/ui/DropdownMenu'
+
+// Maps icon key → Lucide component (single source of truth on the frontend)
+const PROJECT_ICON_MAP = {
+  'code-brackets': Code2,
+  'terminal':      Terminal,
+  'server':        Server,
+  'chart':         BarChart2,
+  'folder':        Folder,
+  'box':           Box,
+  'layers':        Layers,
+  'puzzle-piece':  Puzzle,
+  'clipboard':     ClipboardList,
+  'pulse':         Activity,
+}
 
 
 function relativeTime(iso) {
@@ -220,104 +244,237 @@ function ConnectModal({ onClose }) {
 }
 
 // ── Project card ──────────────────────────────────────────────────────────────
-// Reference: name (15px 600) + status right | mono path + indexed time right | divider | action buttons
+
+/**
+ * ProjectIconBadge — larger rounded-square icon box for the new card layout.
+ * Uses resolved_icon / resolved_color from ProjectResponse (server-resolved, no client logic).
+ */
+function ProjectIconBadge({ icon, color }) {
+  const IconComponent = PROJECT_ICON_MAP[icon] ?? Folder
+  const hex = COLOR_HEX[color] ?? '#818CF8'
+  return (
+    <div
+      style={{
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        background: `${hex}15`,
+        border: `1px solid ${hex}28`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        color: hex,
+      }}
+    >
+      <IconComponent size={18} />
+    </div>
+  )
+}
 
 function ProjectCard({ project, isOwner, onRetry, retrying }) {
   const navigate = useNavigate()
   const isIndexing = project.index_status === 'indexing' || project.index_status === 'pending'
-  const isFailed = project.index_status === 'failed'
-  const isReady = project.index_status === 'ready'
-  const repoName = project.github_repo_full_name?.split('/')[1] ?? project.github_repo_full_name
+  const isFailed   = project.index_status === 'failed'
+  const isReady    = project.index_status === 'ready'
+  const repoName   = project.github_repo_full_name?.split('/')[1] ?? project.github_repo_full_name
+
+  const hex        = COLOR_HEX[project.resolved_color] ?? '#818CF8'
 
   return (
     <div
-      className="bg-[#0D0D0F] border border-white/[0.07] hover:border-white/[0.14] rounded-xl transition-colors duration-150 cursor-pointer overflow-hidden"
+      className="relative rounded-xl overflow-hidden cursor-pointer group transition-all duration-150"
+      style={{
+        background: '#0D0D0F',
+        border: `1px solid ${hex}22`,
+      }}
       onClick={() => { if (!isIndexing) navigate(`/mentor/${project.id}`) }}
     >
-      {/* Card header: name + status */}
-      <div style={{ padding: '16px 20px 12px 20px' }}>
-        <div className="flex items-start justify-between gap-4">
-          {/* Left */}
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span style={{ fontSize: 15, fontWeight: 600, color: '#fff', lineHeight: 1.3 }}>{repoName}</span>
-              {!isOwner && (
-                <span className="bg-white/10 text-white/55 rounded uppercase tracking-wider" style={{ fontSize: 8, fontWeight: 700, padding: '2px 5px' }}>Shared</span>
+      {/* ── Left accent bar ─────────────────────────────────────────────────── */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 3,
+          borderRadius: '12px 0 0 12px',
+          background: `linear-gradient(to bottom, ${hex}CC, ${hex}55)`,
+        }}
+      />
+
+      {/* ── Card body ───────────────────────────────────────────────────────── */}
+      <div style={{ paddingLeft: 16 }}>
+
+        {/* Header row */}
+        <div style={{ padding: '18px 18px 14px 16px' }}>
+          <div className="flex items-start justify-between gap-4">
+
+            {/* Left — icon + name block */}
+            <div className="flex items-start gap-3 min-w-0">
+              <ProjectIconBadge
+                icon={project.resolved_icon}
+                color={project.resolved_color}
+              />
+              <div className="min-w-0" style={{ paddingTop: 2 }}>
+                <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+                  <span style={{ fontSize: 15, fontWeight: 650, color: '#fff', lineHeight: 1.25 }}>
+                    {repoName}
+                  </span>
+                  {!isOwner && (
+                    <span
+                      className="uppercase tracking-wider"
+                      style={{
+                        fontSize: 8, fontWeight: 700, padding: '2px 5px',
+                        background: 'rgba(255,255,255,0.08)',
+                        color: 'rgba(255,255,255,0.45)',
+                        borderRadius: 4,
+                      }}
+                    >
+                      Shared
+                    </span>
+                  )}
+                </div>
+                <span
+                  className="font-mono block truncate"
+                  style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.32)' }}
+                >
+                  {project.github_repo_full_name}
+                </span>
+              </div>
+            </div>
+
+            {/* Right — status + indexed time + chevron nav */}
+            <div className="flex items-start gap-3 flex-shrink-0">
+              {/* Status + time stack */}
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge status={project.index_status} />
+                {!isIndexing && project.last_indexed_at && (
+                  <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.28)' }}>
+                    {relativeIndexedTime(project.last_indexed_at)}
+                  </span>
+                )}
+              </div>
+
+              {/* Circular chevron nav button */}
+              {!isIndexing && !isFailed && (
+                <button
+                  onClick={e => { e.stopPropagation(); navigate(`/mentor/${project.id}`) }}
+                  className="flex items-center justify-center transition-all duration-150"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    border: `1px solid rgba(255,255,255,0.1)`,
+                    background: 'rgba(255,255,255,0.03)',
+                    color: 'rgba(255,255,255,0.3)',
+                    flexShrink: 0,
+                    marginTop: 1,
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = `${hex}60`
+                    e.currentTarget.style.background   = `${hex}12`
+                    e.currentTarget.style.color         = hex
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
+                    e.currentTarget.style.background   = 'rgba(255,255,255,0.03)'
+                    e.currentTarget.style.color         = 'rgba(255,255,255,0.3)'
+                  }}
+                  aria-label={`Open ${repoName}`}
+                >
+                  <ChevronRight size={13} />
+                </button>
               )}
             </div>
-            <span className="font-mono block truncate" style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
-              {project.github_repo_full_name}
-            </span>
-          </div>
-          {/* Right */}
-          <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <StatusBadge status={project.index_status} />
-            {!isIndexing && project.last_indexed_at && (
-              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{relativeIndexedTime(project.last_indexed_at)}</span>
-            )}
           </div>
         </div>
-      </div>
 
-      {/* Action area */}
-      {isIndexing ? (
-        <div style={{ padding: '0 20px 14px 20px' }}><IndeterminateBar /></div>
-      ) : isFailed ? (
-        <div style={{ padding: '0 20px 14px 20px' }}>
-          <div className="flex items-center gap-2 bg-rose-500/5 border border-rose-500/10 rounded-lg px-3 py-2">
-            <span className="text-rose-300 flex-1" style={{ fontSize: 12 }}>Indexing failed</span>
-            <button
-              className="text-rose-300 hover:bg-rose-500/10 transition-colors rounded px-2 py-0.5"
-              style={{ fontSize: 11 }}
-              onClick={e => { e.stopPropagation(); onRetry(project.id) }}
-              disabled={retrying}
-            >
-              {retrying ? 'Retrying…' : 'Retry'}
-            </button>
+        {/* ── Action area ─────────────────────────────────────────────────── */}
+        {isIndexing ? (
+          <div style={{ padding: '0 18px 16px 16px' }}><IndeterminateBar /></div>
+        ) : isFailed ? (
+          <div style={{ padding: '0 18px 16px 16px' }}>
+            <div className="flex items-center gap-2 bg-rose-500/5 border border-rose-500/10 rounded-lg px-3 py-2">
+              <span className="text-rose-300 flex-1" style={{ fontSize: 12 }}>Indexing failed</span>
+              <button
+                className="text-rose-300 hover:bg-rose-500/10 transition-colors rounded px-2 py-0.5"
+                style={{ fontSize: 11 }}
+                onClick={e => { e.stopPropagation(); onRetry(project.id) }}
+                disabled={retrying}
+              >
+                {retrying ? 'Retrying…' : 'Retry'}
+              </button>
+            </div>
           </div>
-        </div>
-      ) : isReady ? (
-        <div
-          className="border-t border-white/[0.05]"
-          style={{ padding: '8px 14px' }}
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex flex-wrap gap-0.5">
-            {(project.mentor_chat_shared || isOwner) && (
-              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/mentor/${project.id}`)}>
-                <MessageSquare size={12} /><span>Mentor</span>
-              </button>
-            )}
-            {(project.career_mode_shared || isOwner) && (
-              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/career/${project.id}`)}>
-                <Briefcase size={12} /><span>Career</span>
-              </button>
-            )}
-            {(project.repo_health_shared || isOwner) && (
-              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/health/${project.id}`)}>
-                <Activity size={12} /><span>Health</span>
-              </button>
-            )}
-            {(project.diagrams_shared || isOwner) && (
-              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/diagram/${project.id}`)}>
-                <GitBranch size={12} /><span>Diagrams</span>
-              </button>
-            )}
-            {(project.pr_review_shared || isOwner) && (
-              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/pr-review/${project.id}`)}>
-                <GitPullRequest size={12} /><span>PR Review</span>
-              </button>
-            )}
-            {isOwner && (
-              <button className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => navigate(`/team/${project.id}`)}>
-                <Users size={12} /><span>Team</span>
-              </button>
-            )}
+        ) : isReady ? (
+          <div
+            style={{
+              borderTop: '1px solid rgba(255,255,255,0.04)',
+              padding: '8px 14px 10px 12px',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap gap-0.5">
+              {(project.mentor_chat_shared || isOwner) && (
+                <button
+                  className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all"
+                  style={{ fontSize: 12, padding: '6px 10px' }}
+                  onClick={() => navigate(`/mentor/${project.id}`)}
+                >
+                  <MessageSquare size={12} /><span>Mentor</span>
+                </button>
+              )}
+              {(project.career_mode_shared || isOwner) && (
+                <button
+                  className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all"
+                  style={{ fontSize: 12, padding: '6px 10px' }}
+                  onClick={() => navigate(`/career/${project.id}`)}
+                >
+                  <Briefcase size={12} /><span>Career</span>
+                </button>
+              )}
+              {(project.repo_health_shared || isOwner) && (
+                <button
+                  className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all"
+                  style={{ fontSize: 12, padding: '6px 10px' }}
+                  onClick={() => navigate(`/health/${project.id}`)}
+                >
+                  <Activity size={12} /><span>Health</span>
+                </button>
+              )}
+              {(project.diagrams_shared || isOwner) && (
+                <button
+                  className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all"
+                  style={{ fontSize: 12, padding: '6px 10px' }}
+                  onClick={() => navigate(`/diagram/${project.id}`)}
+                >
+                  <GitBranch size={12} /><span>Diagrams</span>
+                </button>
+              )}
+              {(project.pr_review_shared || isOwner) && (
+                <button
+                  className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all"
+                  style={{ fontSize: 12, padding: '6px 10px' }}
+                  onClick={() => navigate(`/pr-review/${project.id}`)}
+                >
+                  <GitPullRequest size={12} /><span>PR Review</span>
+                </button>
+              )}
+              {isOwner && (
+                <button
+                  className="flex items-center gap-1.5 rounded-lg text-white/45 hover:text-white hover:bg-white/[0.05] transition-all"
+                  style={{ fontSize: 12, padding: '6px 10px' }}
+                  onClick={() => navigate(`/team/${project.id}`)}
+                >
+                  <Users size={12} /><span>Team</span>
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-
+      </div>{/* end card body */}
     </div>
   )
 }

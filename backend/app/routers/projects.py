@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from arq import ArqRedis
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,11 +11,19 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.career_artifact import CareerArtifact
+from app.models.chunk import Chunk
 from app.models.pr_review import PRReview
 from app.models.project import IndexStatus, Project
 from app.models.team_member import MemberStatus, TeamMember
 from app.models.user import User
 from app.permissions import require_project_access
+from app.services.icon_resolver import (
+    VALID_COLORS,
+    VALID_ICONS,
+    extract_deps_from_chunk_rows,
+    resolve_icon_color,
+    MANIFEST_FILENAMES,
+)
 from app.services.slug import generate_unique_slug
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -47,6 +55,23 @@ class ProjectResponse(BaseModel):
     last_pr_number: int | None = None
     last_pr_verdict: str | None = None
     last_artifact_type: str | None = None
+    # Icon / color fields (always present — server resolves all tiers)
+    icon_override: str | None = None
+    color_override: str | None = None
+    resolved_icon: str = "folder"
+    resolved_color: str = "purple"
+
+
+class IconColorResponse(BaseModel):
+    icon: str
+    color: str
+    icon_override: str | None
+    color_override: str | None
+
+
+class IconColorOverrideRequest(BaseModel):
+    icon_override: str | None = None
+    color_override: str | None = None
 
 
 class IndexJobAccepted(BaseModel):
@@ -99,8 +124,9 @@ async def list_projects(
     db: AsyncSession = Depends(get_db),
 ) -> list[ProjectResponse]:
     # Own projects OR projects where the user has an active TeamMember row.
-    # Three correlated scalar subqueries add last PR + artifact data in ONE query
-    # (not N+1 — the DB executes a single statement with correlated subqueries).
+    # Four correlated scalar subqueries add last PR, artifact, and manifest
+    # chunk data in ONE query (not N+1 — single DB statement with correlated
+    # subqueries, same pattern as last_pr_number).
     uid = current_user.id
 
     # Correlated subquery: latest pr_number for this project
@@ -158,25 +184,177 @@ async def list_projects(
     result = await db.execute(stmt)
     rows = result.all()
 
-    return [
-        ProjectResponse(
-            **{
-                c.name: getattr(project, c.name)
-                for c in Project.__table__.columns
-            },
-            last_pr_number=last_pr_num,
-            last_pr_verdict=last_pr_verd,
-            last_artifact_type=last_art_type,
+    # ── Batch manifest fetch (Option C) ──────────────────────────────────────
+    # For all returned projects, fetch the first chunk for each manifest
+    # filename in a single query, keyed by project_id.  This lets us run
+    # stack-detection in Python without any per-project round-trips.
+    # project_id is indexed on chunks, so the LIKE on file_path is bounded.
+    project_ids = [project.id for project, *_ in rows]
+    manifest_rows: list[tuple[uuid.UUID, str, str]] = []
+    if project_ids:
+        # Fetch at most one chunk per (project_id, manifest_filename) combo.
+        # We use DISTINCT ON to keep only the first row per group.
+        manifest_stmt = (
+            select(Chunk.project_id, Chunk.file_path, Chunk.content)
+            .where(
+                Chunk.project_id.in_(project_ids),
+                # Filter to manifest files only (file_path is indexed via project_id)
+                or_(
+                    *[
+                        Chunk.file_path.like(f"%{fname}")
+                        for fname in MANIFEST_FILENAMES
+                    ]
+                ),
+            )
+            .distinct(Chunk.project_id, Chunk.file_path)
         )
-        for project, last_pr_num, last_pr_verd, last_art_type in rows
-    ]
+        manifest_result = await db.execute(manifest_stmt)
+        manifest_rows = manifest_result.all()
+
+    # Group manifest content by project_id for O(1) lookup.
+    from collections import defaultdict
+    manifest_by_project: dict[uuid.UUID, list[tuple[str, str]]] = defaultdict(list)
+    for pid, file_path, content in manifest_rows:
+        manifest_by_project[pid].append((file_path, content))
+
+    # ── Build response ────────────────────────────────────────────────────────
+    responses = []
+    for project, last_pr_num, last_pr_verd, last_art_type in rows:
+        deps = extract_deps_from_chunk_rows(manifest_by_project[project.id])
+        resolved = resolve_icon_color(
+            project_id=project.id,
+            repo_full_name=project.github_repo_full_name,
+            icon_override=project.icon_override,
+            color_override=project.color_override,
+            deps=deps,
+        )
+        responses.append(
+            ProjectResponse(
+                **{
+                    c.name: getattr(project, c.name)
+                    for c in Project.__table__.columns
+                },
+                last_pr_number=last_pr_num,
+                last_pr_verdict=last_pr_verd,
+                last_artifact_type=last_art_type,
+                resolved_icon=resolved["icon"],
+                resolved_color=resolved["color"],
+            )
+        )
+    return responses
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project: Project = Depends(require_project_access("viewer")),
-) -> Project:
-    return project
+    db: AsyncSession = Depends(get_db),
+) -> ProjectResponse:
+    manifest_result = await db.execute(
+        select(Chunk.file_path, Chunk.content)
+        .where(
+            Chunk.project_id == project.id,
+            or_(
+                *[Chunk.file_path.like(f"%{fname}") for fname in MANIFEST_FILENAMES]
+            ),
+        )
+        .distinct(Chunk.file_path)
+    )
+    deps = extract_deps_from_chunk_rows(manifest_result.all())
+    resolved = resolve_icon_color(
+        project_id=project.id,
+        repo_full_name=project.github_repo_full_name,
+        icon_override=project.icon_override,
+        color_override=project.color_override,
+        deps=deps,
+    )
+    return ProjectResponse(
+        **{c.name: getattr(project, c.name) for c in Project.__table__.columns},
+        resolved_icon=resolved["icon"],
+        resolved_color=resolved["color"],
+    )
+
+
+@router.get("/{project_id}/icon", response_model=IconColorResponse)
+async def get_project_icon(
+    project: Project = Depends(require_project_access("viewer")),
+    db: AsyncSession = Depends(get_db),
+) -> IconColorResponse:
+    """Return resolved icon + color for a project, plus stored overrides."""
+    manifest_result = await db.execute(
+        select(Chunk.file_path, Chunk.content)
+        .where(
+            Chunk.project_id == project.id,
+            or_(
+                *[Chunk.file_path.like(f"%{fname}") for fname in MANIFEST_FILENAMES]
+            ),
+        )
+        .distinct(Chunk.file_path)
+    )
+    deps = extract_deps_from_chunk_rows(manifest_result.all())
+    resolved = resolve_icon_color(
+        project_id=project.id,
+        repo_full_name=project.github_repo_full_name,
+        icon_override=project.icon_override,
+        color_override=project.color_override,
+        deps=deps,
+    )
+    return IconColorResponse(
+        icon=resolved["icon"],
+        color=resolved["color"],
+        icon_override=project.icon_override,
+        color_override=project.color_override,
+    )
+
+
+@router.patch("/{project_id}/icon", response_model=IconColorResponse)
+async def set_project_icon_override(
+    body: IconColorOverrideRequest,
+    project: Project = Depends(require_project_access("owner")),
+    db: AsyncSession = Depends(get_db),
+) -> IconColorResponse:
+    """Set or clear icon/color overrides.  Pass null to reset a field to auto."""
+    # Validate provided values against the canonical registry
+    if body.icon_override is not None and body.icon_override not in VALID_ICONS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid icon key '{body.icon_override}'. Valid keys: {sorted(VALID_ICONS)}",
+        )
+    if body.color_override is not None and body.color_override not in VALID_COLORS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid color key '{body.color_override}'. Valid keys: {sorted(VALID_COLORS)}",
+        )
+
+    project.icon_override = body.icon_override
+    project.color_override = body.color_override
+    await db.commit()
+    await db.refresh(project)
+
+    # Re-resolve after saving so response reflects the new state
+    manifest_result = await db.execute(
+        select(Chunk.file_path, Chunk.content)
+        .where(
+            Chunk.project_id == project.id,
+            or_(
+                *[Chunk.file_path.like(f"%{fname}") for fname in MANIFEST_FILENAMES]
+            ),
+        )
+        .distinct(Chunk.file_path)
+    )
+    deps = extract_deps_from_chunk_rows(manifest_result.all())
+    resolved = resolve_icon_color(
+        project_id=project.id,
+        repo_full_name=project.github_repo_full_name,
+        icon_override=project.icon_override,
+        color_override=project.color_override,
+        deps=deps,
+    )
+    return IconColorResponse(
+        icon=resolved["icon"],
+        color=resolved["color"],
+        icon_override=project.icon_override,
+        color_override=project.color_override,
+    )
 
 
 @router.post("/{project_id}/index", status_code=status.HTTP_202_ACCEPTED, response_model=IndexJobAccepted)

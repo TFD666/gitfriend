@@ -8,8 +8,6 @@ import {
   Users,
   Settings,
   LogOut,
-  Sun,
-  Moon,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -51,21 +49,6 @@ export function useSidebar() {
     throw new Error('useSidebar must be used within a SidebarProvider')
   }
   return context
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function getStoredTheme() {
-  return localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
-}
-
-function applyTheme(theme) {
-  if (theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light')
-  } else {
-    document.documentElement.removeAttribute('data-theme')
-  }
-  localStorage.setItem('theme', theme)
 }
 
 // ── Nav Items ────────────────────────────────────────────────────────────────
@@ -190,17 +173,6 @@ export default function Sidebar() {
   })
   const pendingCount = invites.length
   
-  const [theme, setTheme] = useState(getStoredTheme)
-
-  useEffect(() => {
-    applyTheme(theme)
-  }, [theme])
-
-  function handleThemeToggle() {
-    const nextTheme = theme === 'light' ? 'dark' : 'light'
-    setTheme(nextTheme)
-  }
-
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSuccess: () => {
@@ -382,23 +354,6 @@ export default function Sidebar() {
                   >
                     <Settings size={14} />
                     <span>Settings</span>
-                  </button>
-
-                  <button
-                    onClick={handleThemeToggle}
-                    className="flex items-center justify-between px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {theme === 'light' ? <Sun size={14} /> : <Moon size={14} />}
-                      {open ? (
-                        <span>Theme: {theme === 'light' ? 'Light' : 'Dark'}</span>
-                      ) : (
-                        <span>Theme</span>
-                      )}
-                    </div>
-                    <div className="text-[10px] uppercase font-bold text-white/40 tracking-wider bg-white/[0.05] px-1.5 py-0.5 rounded flex-shrink-0">
-                      Toggle
-                    </div>
                   </button>
 
                   <div className="h-[1px] bg-white/[0.06] my-1" />

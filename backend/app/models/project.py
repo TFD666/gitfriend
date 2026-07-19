@@ -39,6 +39,9 @@ class Project(Base):
     repo_health_shared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     diagrams_shared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     pr_review_shared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # User-controlled overrides — NULL means auto-resolved
+    icon_override: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    color_override: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_diagram_system_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_diagram_dependency_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     diagram_system_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
