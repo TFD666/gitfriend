@@ -316,7 +316,6 @@ function MemberRow({ member, isOwner, currentUserId, projectId }) {
             <SelectValue placeholder="Select role" />
           </SelectTrigger>
           <SelectContent align="end">
-            <SelectItem value="owner">Owner</SelectItem>
             <SelectItem value="editor">Editor</SelectItem>
             <SelectItem value="viewer">Viewer</SelectItem>
           </SelectContent>
